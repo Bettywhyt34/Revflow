@@ -1,6 +1,8 @@
 import NextAuth, { type NextAuthConfig } from 'next-auth'
 import Google from 'next-auth/providers/google'
 import MicrosoftEntraID from 'next-auth/providers/microsoft-entra-id'
+import Credentials from 'next-auth/providers/credentials'
+import bcrypt from 'bcryptjs'
 import { createAdminClient } from '@/lib/supabase'
 
 // ---------------------------------------------------------------------------
@@ -31,26 +33,90 @@ function ZohoProvider(options: { clientId: string; clientSecret: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Build provider list — only include OAuth providers when env vars are present
+// ---------------------------------------------------------------------------
+function buildProviders() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const providers: any[] = []
+
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    providers.push(
+      Google({
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      }),
+    )
+  }
+
+  if (process.env.AZURE_AD_CLIENT_ID && process.env.AZURE_AD_CLIENT_SECRET) {
+    providers.push(
+      MicrosoftEntraID({
+        clientId: process.env.AZURE_AD_CLIENT_ID,
+        clientSecret: process.env.AZURE_AD_CLIENT_SECRET,
+        issuer: process.env.AZURE_AD_TENANT_ID
+          ? `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`
+          : 'https://login.microsoftonline.com/common/v2.0',
+      }),
+    )
+  }
+
+  if (process.env.ZOHO_CLIENT_ID && process.env.ZOHO_CLIENT_SECRET) {
+    providers.push(
+      ZohoProvider({
+        clientId: process.env.ZOHO_CLIENT_ID,
+        clientSecret: process.env.ZOHO_CLIENT_SECRET,
+      }),
+    )
+  }
+
+  // Credentials provider — always available for email/password login
+  providers.push(
+    Credentials({
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        const email = credentials?.email as string | undefined
+        const password = credentials?.password as string | undefined
+        if (!email || !password) return null
+
+        const supabase = createAdminClient()
+        const { data: dbUser } = await supabase
+          .from('users')
+          .select('id, email, full_name, avatar_url, role, org_id, password_hash')
+          .eq('email', email)
+          .maybeSingle()
+
+        if (!dbUser || !dbUser.password_hash) return null
+
+        const valid = await bcrypt.compare(password, dbUser.password_hash)
+        if (!valid) return null
+
+        // Update last_login
+        await supabase
+          .from('users')
+          .update({ last_login: new Date().toISOString() })
+          .eq('id', dbUser.id)
+
+        return {
+          id: dbUser.id,
+          email: dbUser.email,
+          name: dbUser.full_name,
+          image: dbUser.avatar_url ?? null,
+        }
+      },
+    }),
+  )
+
+  return providers
+}
+
+// ---------------------------------------------------------------------------
 // Auth config
 // ---------------------------------------------------------------------------
 export const authConfig: NextAuthConfig = {
-  providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-    MicrosoftEntraID({
-      clientId: process.env.AZURE_AD_CLIENT_ID!,
-      clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
-      issuer: process.env.AZURE_AD_TENANT_ID
-        ? `https://login.microsoftonline.com/${process.env.AZURE_AD_TENANT_ID}/v2.0`
-        : 'https://login.microsoftonline.com/common/v2.0',
-    }),
-    ZohoProvider({
-      clientId: process.env.ZOHO_CLIENT_ID ?? '',
-      clientSecret: process.env.ZOHO_CLIENT_SECRET ?? '',
-    }),
-  ],
+  providers: buildProviders(),
 
   session: { strategy: 'jwt' },
 
@@ -62,9 +128,13 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     // ------------------------------------------------------------------
     // signIn — upsert user into Supabase after OAuth success
+    // (Credentials provider skips this — user must already exist in DB)
     // ------------------------------------------------------------------
-    async signIn({ user }) {
+    async signIn({ user, account }) {
       if (!user.email) return false
+
+      // Credentials logins: user already verified in authorize(), skip upsert
+      if (account?.provider === 'credentials') return true
 
       const supabase = createAdminClient()
 
@@ -111,6 +181,14 @@ export const authConfig: NextAuthConfig = {
           }
           orgId = org.id
           userRole = 'admin'
+
+          // Seed default timeline_settings for the new org
+          await supabase.from('timeline_settings').insert([
+            { org_id: orgId, setting_key: 'proforma_validity_days', setting_value: { value: 30 } },
+            { org_id: orgId, setting_key: 'payment_due_days', setting_value: { value: 30 } },
+            { org_id: orgId, setting_key: 'chase_intervals_days', setting_value: { intervals: [7, 14, 21] } },
+            { org_id: orgId, setting_key: 'overdue_escalation_days', setting_value: { value: 60 } },
+          ])
         } else {
           // Subsequent user — get existing org, set role to null (pending)
           const { data: org } = await supabase

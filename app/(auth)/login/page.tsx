@@ -1,31 +1,41 @@
+'use client'
+
+import { useState } from 'react'
+import { signIn } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { signIn } from '@/lib/auth'
-import { Chrome, AlertCircle } from 'lucide-react'
-
-// Microsoft icon (no lucide equivalent — inline SVG)
-function MicrosoftIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 21 21" fill="none" aria-hidden="true">
-      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-      <rect x="11" y="1" width="9" height="9" fill="#00a4ef" />
-      <rect x="1" y="11" width="9" height="9" fill="#7fba00" />
-      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-    </svg>
-  )
-}
-
-// Zoho icon (text-based fallback)
-function ZohoIcon() {
-  return (
-    <span className="text-xs font-bold leading-none text-[#e42527]" aria-hidden="true">
-      Z
-    </span>
-  )
-}
 
 export default function LoginPage() {
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    const result = await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
+    })
+
+    setLoading(false)
+
+    if (result?.error) {
+      setError('Invalid email or password.')
+    } else {
+      router.push('/dashboard')
+    }
+  }
+
   return (
     <Card className="w-full max-w-md shadow-sm">
       <CardHeader className="text-center pb-4">
@@ -42,56 +52,55 @@ export default function LoginPage() {
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-3">
-        {/* Google */}
-        <form
-          action={async () => {
-            'use server'
-            await signIn('google', { redirectTo: '/dashboard' })
-          }}
-        >
-          <Button type="submit" variant="outline" className="w-full gap-2 h-10">
-            <Chrome className="size-4" />
-            Continue with Google
-          </Button>
-        </form>
-
-        {/* Microsoft */}
-        <form
-          action={async () => {
-            'use server'
-            await signIn('microsoft-entra-id', { redirectTo: '/dashboard' })
-          }}
-        >
-          <Button type="submit" variant="outline" className="w-full gap-2 h-10">
-            <MicrosoftIcon />
-            Continue with Microsoft
-          </Button>
-        </form>
-
-        <Separator className="my-1" />
-
-        {/* Zoho — disabled, coming soon */}
-        <div className="relative group">
-          <Button
-            variant="outline"
-            className="w-full gap-2 h-10 cursor-not-allowed opacity-50"
-            disabled
-            aria-disabled="true"
-          >
-            <ZohoIcon />
-            Continue with Zoho
-          </Button>
-          <div
-            role="tooltip"
-            className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-foreground px-2 py-1 text-xs text-background opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity"
-          >
-            <AlertCircle className="inline size-3 mr-1" />
-            Coming soon
+      <CardContent className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign in'}
+          </Button>
+        </form>
+
+        <Separator />
+
+        <div className="flex flex-col gap-1 text-center">
+          <p className="text-xs text-muted-foreground">
+            Google &amp; Microsoft OAuth available after credentials are configured
+          </p>
+          <p className="text-xs text-muted-foreground">Zoho — Coming soon</p>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-2">
+        <p className="text-center text-xs text-muted-foreground">
           By signing in, you agree to QVT Media&apos;s internal platform policies.
         </p>
       </CardContent>
