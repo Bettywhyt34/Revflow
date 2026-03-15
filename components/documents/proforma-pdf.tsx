@@ -6,8 +6,28 @@ import {
   View,
   Image,
   StyleSheet,
+  Font,
 } from '@react-pdf/renderer'
 import { toWords } from 'number-to-words'
+import path from 'path'
+
+// ── Font registration ────────────────────────────────────────────────────────
+// NotoSans includes ₦ (U+20A6 Naira Sign) and full Latin character set.
+// WOFF files are committed to public/fonts/ and loaded via absolute path.
+
+Font.register({
+  family: 'NotoSans',
+  fonts: [
+    {
+      src: path.join(process.cwd(), 'public', 'fonts', 'NotoSans-Regular.ttf'),
+      fontWeight: 400,
+    },
+    {
+      src: path.join(process.cwd(), 'public', 'fonts', 'NotoSans-Bold.ttf'),
+      fontWeight: 700,
+    },
+  ],
+})
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -44,7 +64,7 @@ function fmtAmt(amount: number, currency: string): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
-  // Use ₦ unicode for NGN; ISO code + space for everything else
+  // Use ₦ unicode for NGN (renders correctly with NotoSans font)
   const sym = currency === 'NGN' ? '\u20A6' : currency + ' '
   return sym + n
 }
@@ -68,7 +88,7 @@ function buildStyles(primaryColor: string) {
       paddingHorizontal: 40,
       paddingTop: 36,
       paddingBottom: 40,
-      fontFamily: 'Helvetica',
+      fontFamily: 'NotoSans',
       fontSize: 10,
       color: '#1a1a1a',
       display: 'flex',
@@ -88,7 +108,8 @@ function buildStyles(primaryColor: string) {
     },
     orgNameText: {
       fontSize: 22,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: primaryColor,
     },
     titleBlock: {
@@ -98,7 +119,8 @@ function buildStyles(primaryColor: string) {
     },
     documentTitle: {
       fontSize: 26,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: '#1a1a4e',
       textAlign: 'right',
     },
@@ -125,14 +147,16 @@ function buildStyles(primaryColor: string) {
     },
     metaLabel: {
       fontSize: 8,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: primaryColor,
       marginBottom: 4,
       textTransform: 'uppercase',
     },
     metaValue: {
       fontSize: 10,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: '#1a1a1a',
     },
     metaRight: {
@@ -140,13 +164,15 @@ function buildStyles(primaryColor: string) {
     },
     toLabel: {
       fontSize: 8,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: primaryColor,
       marginBottom: 4,
     },
     toName: {
       fontSize: 11,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: '#1a1a1a',
       textAlign: 'right',
     },
@@ -160,7 +186,8 @@ function buildStyles(primaryColor: string) {
     // ── Subject ──────────────────────────────────────────────────────────────
     subjectLabel: {
       fontSize: 9,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: primaryColor,
       marginBottom: 4,
     },
@@ -184,7 +211,8 @@ function buildStyles(primaryColor: string) {
     },
     tableHeaderCell: {
       color: '#ffffff',
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       fontSize: 8,
       textTransform: 'uppercase',
     },
@@ -221,7 +249,8 @@ function buildStyles(primaryColor: string) {
     },
     totalLabel: {
       fontSize: 12,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: primaryColor,
       marginRight: 14,
     },
@@ -233,7 +262,8 @@ function buildStyles(primaryColor: string) {
     },
     totalAmount: {
       fontSize: 12,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: '#1a1a1a',
     },
     // ── Amount in words ──────────────────────────────────────────────────────
@@ -245,7 +275,8 @@ function buildStyles(primaryColor: string) {
     },
     amountInWordsLabel: {
       fontSize: 8,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: primaryColor,
       marginRight: 6,
     },
@@ -262,7 +293,8 @@ function buildStyles(primaryColor: string) {
     },
     thankYou: {
       fontSize: 10,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: 'NotoSans',
+      fontWeight: 700,
       color: primaryColor,
       textAlign: 'center',
       marginBottom: 8,

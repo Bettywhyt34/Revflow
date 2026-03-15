@@ -5,25 +5,18 @@ import { ArrowLeft, Mail, CheckCircle, Download } from 'lucide-react'
 import { getDocumentById } from '@/lib/data/documents'
 import { getOrgBankAccounts, getOrgSettingsWithDefaults } from '@/lib/data/settings'
 import { createAdminClient } from '@/lib/supabase'
-import type { UserRole, OrgBankAccount } from '@/types'
+import type { UserRole } from '@/types'
+import { toWords } from 'number-to-words'
+import ProformaHTMLPreview from '@/components/documents/proforma-html-preview'
+import type { SavedLineItem } from '@/lib/data/documents'
 import SendProformaButton from './send-button'
-
-function fmt(amount: number | null, currency = 'NGN'): string {
-  if (amount == null) return '—'
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  }).format(amount)
-}
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
+  const d = new Date(iso)
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  return `${day}/${month}/${d.getUTCFullYear()}`
 }
 
 function fmtDateTime(iso: string | null): string {
@@ -35,6 +28,15 @@ function fmtDateTime(iso: string | null): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function toNairaWords(amount: number): string {
+  if (amount <= 0) return '—'
+  const naira = Math.floor(amount)
+  const kobo = Math.round((amount - naira) * 100)
+  let result = toWords(naira).toUpperCase() + ' NAIRA'
+  if (kobo > 0) result += ', ' + toWords(kobo).toUpperCase() + ' KOBO'
+  return result + ' ONLY'
 }
 
 export async function generateMetadata({
@@ -65,33 +67,52 @@ export default async function ViewProformaPage({
   const isSent = !!doc.sent_at
   const isDraft = doc.status === 'draft'
   const canSend = role === 'admin' || role === 'planner'
-  const showAgencyFee = (doc.agency_fee_amount ?? 0) > 0
 
-  // Fetch bank accounts and resolve display account
   const [bankAccounts, orgSettings, clientRow] = await Promise.all([
     getOrgBankAccounts(orgId),
     getOrgSettingsWithDefaults(orgId),
     campaign.client_id
       ? createAdminClient()
           .from('clients')
-          .select('preferred_bank_account_id')
+          .select('preferred_bank_account_id, customer_id, address')
           .eq('id', campaign.client_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ])
 
-  const clientPreferredBankAccountId =
-    (clientRow.data as { preferred_bank_account_id?: string | null } | null)
-      ?.preferred_bank_account_id ?? null
+  const rawClient = clientRow.data as {
+    preferred_bank_account_id?: string | null
+    customer_id?: string | null
+    address?: string | null
+  } | null
 
-  // Resolve display bank account: client preferred → org default
-  let displayBankAccount: OrgBankAccount | null = null
-  if (clientPreferredBankAccountId) {
-    displayBankAccount = bankAccounts.find((a) => a.id === clientPreferredBankAccountId) ?? null
-  }
-  if (!displayBankAccount) {
-    displayBankAccount = bankAccounts.find((a) => a.is_default) ?? bankAccounts[0] ?? null
-  }
+  const clientPreferredBankAccountId = rawClient?.preferred_bank_account_id ?? null
+  const clientCustomerId = rawClient?.customer_id ?? null
+  const clientAddress = rawClient?.address ?? null
+
+  // Build line items
+  const savedItems = (doc.line_items ?? []) as SavedLineItem[]
+  const lineItems =
+    savedItems.length > 0
+      ? savedItems.map((i) => ({
+          qty: i.qty,
+          description: i.description,
+          unitPrice: i.unit_price,
+          lineTotal: i.line_total,
+        }))
+      : (doc.amount_before_vat ?? 0) > 0
+        ? [
+            {
+              qty: 1,
+              description: campaign.title,
+              unitPrice: doc.amount_before_vat ?? 0,
+              lineTotal: doc.amount_before_vat ?? 0,
+            },
+          ]
+        : []
+
+  const customerId = clientCustomerId ?? campaign.tracker_id ?? '—'
+  const amountInWords = toNairaWords(doc.total_amount ?? 0)
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-6">
@@ -118,196 +139,25 @@ export default async function ViewProformaPage({
       )}
 
       {/* Proforma document */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {/* Header */}
-        <div className="px-8 py-6 flex flex-col sm:flex-row sm:justify-between gap-4 items-start">
-          <div>
-            {orgSettings.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={orgSettings.logo_url}
-                alt={orgSettings.org_name ?? 'Logo'}
-                className="h-12 max-w-[160px] object-contain mb-1"
-              />
-            ) : (
-              <div
-                className="text-2xl font-extrabold tracking-tight"
-                style={{ color: orgSettings.primary_color }}
-              >
-                {orgSettings.org_name ?? 'QVT MEDIA'}
-              </div>
-            )}
-          </div>
-          <div className="sm:text-right">
-            <div
-              className="text-lg font-bold"
-              style={{ color: '#1a1a4e' }}
-            >
-              PROFORMA INVOICE
-            </div>
-            <div
-              className="text-sm mt-1 font-semibold"
-              style={{ color: orgSettings.primary_color }}
-            >
-              {doc.document_number}
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              Date: {fmtDate(doc.issue_date)}<br />
-              Valid Until: {fmtDate(doc.due_date)}
-            </div>
-          </div>
-        </div>
-        {/* Brand divider */}
-        <div
-          className="mx-8 mb-0"
-          style={{ height: 2, backgroundColor: orgSettings.primary_color }}
-        />
+      <ProformaHTMLPreview
+        orgName={orgSettings.org_name ?? 'QVT MEDIA'}
+        orgLogoUrl={orgSettings.logo_url}
+        primaryColor={orgSettings.primary_color ?? '#0D9488'}
+        invoiceNumber={doc.document_number}
+        issueDate={fmtDate(doc.issue_date)}
+        recipientName={doc.recipient_name ?? campaign.advertiser}
+        recipientAddress={clientAddress}
+        customerId={customerId}
+        invoiceSubject={doc.invoice_subject ?? campaign.title}
+        currency={doc.currency}
+        lineItems={lineItems}
+        vatAmount={doc.vat_amount ?? 0}
+        totalAmount={doc.total_amount ?? 0}
+        amountInWords={amountInWords}
+        notes={doc.notes}
+      />
 
-        {/* Body */}
-        <div className="px-8 py-7 space-y-6">
-          {/* Bill To + Recognition Period */}
-          <div className="flex flex-col sm:flex-row sm:justify-between gap-4">
-            <div>
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Bill To</div>
-              <div className="font-bold text-gray-900 text-base">{doc.recipient_name ?? campaign.advertiser}</div>
-              {doc.recipient_email && (
-                <div className="text-sm text-gray-500 mt-0.5">{doc.recipient_email}</div>
-              )}
-            </div>
-            <div className="sm:text-right">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
-                Recognition Period
-              </div>
-              <div className="text-sm font-semibold" style={{ color: orgSettings.primary_color }}>
-                {doc.recognition_period_start && doc.recognition_period_end
-                  ? `${fmtDate(doc.recognition_period_start)} – ${fmtDate(doc.recognition_period_end)}`
-                  : '— not set —'}
-              </div>
-            </div>
-          </div>
-
-          {/* Campaign reference */}
-          <div>
-            <div className="text-xs text-gray-400 mb-0.5">RE: Ref {campaign.tracker_id}</div>
-            <div className="font-bold text-gray-900 text-lg">{campaign.title}</div>
-          </div>
-
-          {/* Line items */}
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b-2 border-gray-200">
-                <th className="py-2.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wide w-8">#</th>
-                <th className="py-2.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wide">Description</th>
-                <th className="py-2.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wide">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-gray-100">
-                <td className="py-3.5 text-gray-400 text-sm">1</td>
-                <td className="py-3.5 text-gray-700">
-                  {campaign.title}
-                  {doc.recognition_period_start && doc.recognition_period_end && (
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {fmtDate(doc.recognition_period_start)} – {fmtDate(doc.recognition_period_end)}
-                    </div>
-                  )}
-                </td>
-                <td className="py-3.5 text-right font-medium text-gray-800">
-                  {fmt(doc.amount_before_vat, doc.currency)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          {/* Totals */}
-          <div className="flex justify-end">
-            <table className="w-72 text-sm border-collapse">
-              <tbody>
-                <tr>
-                  <td className="py-2 text-gray-500">Subtotal</td>
-                  <td className="py-2 text-right text-gray-700">{fmt(doc.amount_before_vat, doc.currency)}</td>
-                </tr>
-                {showAgencyFee && (
-                  <tr>
-                    <td className="py-2 text-gray-500">Agency Commission ({campaign.agency_fee_pct}%)</td>
-                    <td className="py-2 text-right text-gray-700">{fmt(doc.agency_fee_amount, doc.currency)}</td>
-                  </tr>
-                )}
-                <tr>
-                  <td className="py-2 text-gray-500">VAT @ 7.5%</td>
-                  <td className="py-2 text-right text-gray-700">{fmt(doc.vat_amount, doc.currency)}</td>
-                </tr>
-                <tr className="border-t-2" style={{ borderColor: orgSettings.primary_color }}>
-                  <td className="pt-3 font-bold text-gray-900 text-base">Total Due</td>
-                  <td className="pt-3 text-right font-bold text-gray-900 text-base">
-                    {fmt(doc.total_amount, doc.currency)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Payment callout */}
-          {doc.due_date && (
-            <div
-              className="rounded-lg px-5 py-3"
-              style={{
-                backgroundColor: orgSettings.primary_color + '18',
-                border: `1px solid ${orgSettings.primary_color}40`,
-              }}
-            >
-              <span
-                className="text-sm font-semibold"
-                style={{ color: orgSettings.primary_color }}
-              >
-                Payment due by {fmtDate(doc.due_date)}
-              </span>
-              <span className="text-sm text-gray-500 ml-1">(30 days from invoice date)</span>
-            </div>
-          )}
-
-          {doc.notes && (
-            <div
-              className="bg-gray-50 px-4 py-3 text-sm text-gray-600 rounded-r-lg border-l-4"
-              style={{ borderColor: orgSettings.primary_color }}
-            >
-              <span className="font-semibold">Notes:</span> {doc.notes}
-            </div>
-          )}
-
-          {/* Bank details */}
-          <div className="bg-gray-50 rounded-xl px-5 py-4">
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Payment Details</div>
-            {displayBankAccount ? (
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-                <dt className="text-gray-400">Bank</dt>
-                <dd className="font-medium text-gray-700">{displayBankAccount.bank_name}</dd>
-                <dt className="text-gray-400">Account Name</dt>
-                <dd className="font-medium text-gray-700">{displayBankAccount.account_name}</dd>
-                <dt className="text-gray-400">Account Number</dt>
-                <dd className="font-medium text-gray-700">{displayBankAccount.account_number}</dd>
-                {displayBankAccount.bank_code && (
-                  <>
-                    <dt className="text-gray-400">Sort Code</dt>
-                    <dd className="font-medium text-gray-700">{displayBankAccount.bank_code}</dd>
-                  </>
-                )}
-              </dl>
-            ) : (
-              <p className="text-sm text-gray-400 italic">
-                Not configured — add bank accounts in Settings → Documents.
-              </p>
-            )}
-          </div>
-
-          <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
-            This is a proforma invoice. Payment constitutes acceptance of the booking.
-            For enquiries: billing@revflowapp.com
-          </p>
-        </div>
-      </div>
-
-      {/* Send button */}
+      {/* Action buttons */}
       {canSend && (
         <div className="flex justify-end gap-3 flex-wrap">
           <Link

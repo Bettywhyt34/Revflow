@@ -8,6 +8,7 @@ import { createProformaAction, sendProformaAction, getProformaPreviewAction } fr
 import { EmailChips } from '@/components/clients/client-form'
 import SendDialog from '@/components/documents/send-dialog'
 import { useOrgSettings } from '@/components/layout/org-settings-context'
+import ProformaHTMLPreview from '@/components/documents/proforma-html-preview'
 
 const VAT_RATE = 0.075
 
@@ -103,173 +104,6 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
         disabled:bg-gray-50 ${props.className ?? ''}`}
       style={{ '--tw-ring-color': '#0D9488' } as React.CSSProperties}
     />
-  )
-}
-
-// ── Preview component ──────────────────────────────────────────────────────
-
-interface PreviewProps {
-  campaign: Campaign
-  recipientName: string
-  recipientAddress: string | null
-  clientCustomerId: string | null
-  issueDate: string
-  recognitionStart: string
-  recognitionEnd: string
-  subject: string
-  lineItems: LineItem[]
-  subtotal: number
-  vatAmount: number
-  totalAmount: number
-  amountInWords: string
-  notes: string
-  docNumber: string
-  orgLogoUrl: string | null
-  primaryColor: string
-  orgName: string
-}
-
-function ProformaPreview(p: PreviewProps) {
-  const pc = p.primaryColor
-  const customerId = p.clientCustomerId ?? '—'
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden text-xs font-sans select-none">
-
-      {/* ── Header ── */}
-      <div className="px-8 pt-7 pb-3 flex justify-between items-start gap-4">
-        <div>
-          {p.orgLogoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.orgLogoUrl} alt={p.orgName} className="h-14 max-w-[150px] object-contain" />
-          ) : (
-            <span className="text-2xl font-extrabold leading-none" style={{ color: pc }}>{p.orgName}</span>
-          )}
-        </div>
-        <div className="text-right pt-1">
-          <div className="text-xl font-extrabold leading-tight" style={{ color: '#1a1a4e' }}>
-            PROFORMA INVOICE
-          </div>
-        </div>
-      </div>
-
-      {/* ── Divider ── */}
-      <hr className="mx-8 mb-5" style={{ borderColor: pc, borderTopWidth: 3 }} />
-
-      {/* ── Meta: LEFT stacked DATE/INVOICE#/CUSTOMER ID | RIGHT TO ── */}
-      <div className="px-8 pb-5 flex justify-between gap-6">
-        <div className="flex gap-7">
-          {[
-            ['DATE', p.issueDate ? fmtDate(p.issueDate) : '—'],
-            ['INVOICE #', p.docNumber || '(on save)'],
-            ['CUSTOMER ID', customerId],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <div className="font-bold text-[9px] uppercase mb-1" style={{ color: pc }}>{label}</div>
-              <div className="font-bold text-gray-900 text-[11px]">{value}</div>
-            </div>
-          ))}
-        </div>
-        <div className="text-right">
-          <div className="font-bold text-[9px] uppercase mb-1" style={{ color: pc }}>TO</div>
-          <div className="font-bold text-gray-900 text-[11px]">{p.recipientName || '—'}</div>
-          {p.recipientAddress && (
-            <div className="text-gray-500 mt-1 whitespace-pre-line max-w-[180px] text-right text-[10px]">
-              {p.recipientAddress}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Subject ── */}
-      <div className="px-8 pb-4">
-        <div className="font-bold text-[9px] uppercase mb-1.5" style={{ color: pc }}>SUBJECT:</div>
-        <div className="border px-3 py-2 text-[11px] text-gray-800" style={{ borderColor: pc }}>
-          {p.subject || <span className="text-gray-400 italic">Enter subject…</span>}
-        </div>
-      </div>
-
-      {/* ── Line items table ── */}
-      <div className="px-8 pb-3 overflow-x-auto">
-        <table className="w-full border-collapse text-[11px]">
-          <thead>
-            <tr style={{ backgroundColor: pc }}>
-              <th className="py-2 px-2 text-white font-bold uppercase text-left w-[8%]">QTY</th>
-              <th className="py-2 px-2 text-white font-bold uppercase text-left w-[47%]">DESCRIPTION</th>
-              <th className="py-2 px-2 text-white font-bold uppercase text-right w-[23%]">UNIT PRICE</th>
-              <th className="py-2 px-2 text-white font-bold uppercase text-right w-[22%]">LINE TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            {p.lineItems.map((item) => {
-              const qty = parseFloat(item.qty) || 0
-              const price = parseFloat(item.unitPrice) || 0
-              const lineTotal = qty * price
-              return (
-                <tr key={item.id} className="border-b border-gray-200" style={{ height: 26 }}>
-                  <td className="py-1.5 px-2 text-gray-700">{item.qty || ''}</td>
-                  <td className="py-1.5 px-2 text-gray-800">{item.description || ''}</td>
-                  <td className="py-1.5 px-2 text-right text-gray-800">
-                    {price > 0 ? fmt(price, p.campaign.currency) : ''}
-                  </td>
-                  <td className="py-1.5 px-2 text-right text-gray-800">
-                    {lineTotal > 0 ? fmt(lineTotal, p.campaign.currency) : ''}
-                  </td>
-                </tr>
-              )
-            })}
-            {/* VAT row */}
-            <tr className="border-b border-gray-200" style={{ height: 26 }}>
-              <td className="py-1.5 px-2"></td>
-              <td className="py-1.5 px-2 text-gray-800">Vat@ 7.5%</td>
-              <td className="py-1.5 px-2"></td>
-              <td className="py-1.5 px-2 text-right text-gray-800">
-                {p.vatAmount > 0 ? fmt(p.vatAmount, p.campaign.currency) : ''}
-              </td>
-            </tr>
-            {/* Empty rows */}
-            {Array.from({ length: 5 }).map((_, i) => (
-              <tr key={`empty-${i}`} className="border-b border-gray-200" style={{ height: 26 }}>
-                <td className="px-2"></td>
-                <td className="px-2"></td>
-                <td className="px-2"></td>
-                <td className="px-2"></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ── TOTAL ── */}
-      <div className="px-8 pb-4 flex justify-end items-center gap-3">
-        <span className="font-bold text-sm" style={{ color: pc }}>TOTAL</span>
-        <div
-          className="border-2 px-4 py-1.5 font-bold text-sm text-gray-900"
-          style={{ borderColor: pc }}
-        >
-          {fmt(p.totalAmount, p.campaign.currency)}
-        </div>
-      </div>
-
-      {/* ── Amount in words ── */}
-      <div className="px-8 pb-5 flex gap-2 flex-wrap text-[10px]">
-        <span className="font-bold shrink-0" style={{ color: pc }}>AMOUNT IN WORDS:</span>
-        <span className="text-gray-800 leading-relaxed">{p.amountInWords}</span>
-      </div>
-
-      {/* ── Footer ── */}
-      <div className="mx-8 mb-6 border-t border-gray-100 pt-4 space-y-2">
-        <div className="text-center font-bold text-[11px]" style={{ color: pc }}>
-          THANK YOU FOR YOUR BUSINESS
-        </div>
-        <div className="text-center text-[10px] text-gray-500">
-          {p.notes
-            ? `NOTE: ${p.notes}`
-            : `NOTE: All cheques should be in favor of ${p.orgName}`}
-        </div>
-      </div>
-
-    </div>
   )
 }
 
@@ -765,25 +599,27 @@ export default function ProformaForm({
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
             Live Preview
           </h2>
-          <ProformaPreview
-            campaign={campaign}
+          <ProformaHTMLPreview
+            orgName={orgName}
+            orgLogoUrl={orgLogoUrl}
+            primaryColor={primaryColor}
+            invoiceNumber={savedDocNumber ?? ''}
+            issueDate={issueDate ? fmtDate(issueDate) : '—'}
             recipientName={recipientName}
             recipientAddress={clientAddress ?? null}
-            clientCustomerId={clientCustomerId ?? null}
-            issueDate={issueDate}
-            recognitionStart={recognitionStart}
-            recognitionEnd={recognitionEnd}
-            subject={subject}
-            lineItems={lineItems}
-            subtotal={subtotal}
+            customerId={clientCustomerId ?? '—'}
+            invoiceSubject={subject}
+            currency={campaign.currency}
+            lineItems={parsedItems.map((i) => ({
+              qty: i.qtyNum,
+              description: i.description,
+              unitPrice: i.priceNum,
+              lineTotal: i.lineTotalNum,
+            }))}
             vatAmount={vatAmount}
             totalAmount={totalAmount}
             amountInWords={amountInWords}
             notes={notes}
-            docNumber={savedDocNumber ?? ''}
-            orgLogoUrl={orgLogoUrl}
-            primaryColor={primaryColor}
-            orgName={orgName}
           />
         </div>
       </div>
