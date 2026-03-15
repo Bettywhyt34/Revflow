@@ -18,14 +18,11 @@ import type { UserRole } from '@/types'
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, active: true },
-  { label: 'Campaigns',  href: '/campaigns',  icon: Briefcase,       active: true },
-  { label: 'Reports',    href: '/reports',    icon: BarChart3,       active: false },
-  { label: 'Admin',      href: '/admin',      icon: Settings,        active: false },
+  { label: 'Dashboard', href: '/dashboard',    icon: LayoutDashboard, active: true,  adminOnly: false },
+  { label: 'Campaigns', href: '/campaigns',    icon: Briefcase,       active: true,  adminOnly: false },
+  { label: 'Reports',   href: '/reports',      icon: BarChart3,       active: false, adminOnly: false },
+  { label: 'Users',     href: '/admin/users',  icon: Settings,        active: true,  adminOnly: true  },
 ]
-
-// Bottom tabs (mobile) — only active nav items
-const BOTTOM_TABS = NAV_ITEMS.filter((n) => n.active)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function roleLabel(role: UserRole | null): string {
@@ -50,6 +47,11 @@ function initials(name: string | null | undefined): string {
 }
 
 // ── Sidebar content ──────────────────────────────────────────────────────────
+// Bottom tabs (mobile) — only active, non-admin-only items
+function getBottomTabs(role: UserRole | null) {
+  return NAV_ITEMS.filter((n) => n.active && (!n.adminOnly || role === 'admin'))
+}
+
 function SidebarContent({
   user,
   pathname,
@@ -91,7 +93,7 @@ function SidebarContent({
 
       {/* Nav links */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => !item.adminOnly || user.role === 'admin').map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           const Icon = item.icon
 
@@ -157,10 +159,11 @@ function SidebarContent({
 }
 
 // ── Mobile bottom nav ─────────────────────────────────────────────────────────
-function MobileBottomNav({ pathname }: { pathname: string }) {
+function MobileBottomNav({ pathname, role }: { pathname: string; role: UserRole | null }) {
+  const tabs = getBottomTabs(role)
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 flex safe-bottom">
-      {BOTTOM_TABS.map((item) => {
+      {tabs.map((item) => {
         const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
         const Icon = item.icon
         return (
@@ -277,7 +280,7 @@ export default function AppShell({
       </div>
 
       {/* Mobile bottom nav */}
-      <MobileBottomNav pathname={pathname} />
+      <MobileBottomNav pathname={pathname} role={user.role} />
     </div>
   )
 }

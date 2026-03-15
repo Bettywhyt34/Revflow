@@ -7,18 +7,21 @@ export const proxy = auth((req) => {
   const isLoggedIn = !!session
   const role = (session?.user as { role?: string | null } | undefined)?.role ?? null
 
-  // Always allow auth API routes
-  if (pathname.startsWith('/api/auth')) {
+  // Always allow auth API routes and public API routes
+  if (pathname.startsWith('/api/auth') || pathname.startsWith('/api/invite')) {
     return NextResponse.next()
   }
 
-  // ── /login ───────────────────────────────────────────────────────────
+  // ── /login ────────────────────────────────────────────────────────────
   if (pathname === '/login' || pathname.startsWith('/login')) {
     if (!isLoggedIn) return NextResponse.next()
-    // Logged in → send to appropriate destination
-    return NextResponse.redirect(
-      new URL(role ? '/dashboard' : '/pending', req.url)
-    )
+    return NextResponse.redirect(new URL(role ? '/dashboard' : '/pending', req.url))
+  }
+
+  // ── /signup ───────────────────────────────────────────────────────────
+  if (pathname === '/signup' || pathname.startsWith('/signup')) {
+    if (!isLoggedIn) return NextResponse.next()
+    return NextResponse.redirect(new URL(role ? '/dashboard' : '/pending', req.url))
   }
 
   // ── /pending ──────────────────────────────────────────────────────────
@@ -41,13 +44,6 @@ export const proxy = auth((req) => {
 
 export const config = {
   matcher: [
-    /*
-     * Match all paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico
-     * - public folder files
-     */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

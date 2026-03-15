@@ -3,64 +3,60 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Clock } from 'lucide-react'
 
 export default function PendingPage() {
   const router = useRouter()
   const { data: session, update } = useSession()
 
-  // Refresh session on window focus — picks up role assignment by admin
+  // Refresh session when user returns to tab (picks up role assignment by admin)
   useEffect(() => {
-    const handleFocus = async () => {
-      await update()
-    }
-
+    const handleFocus = async () => { await update() }
     window.addEventListener('focus', handleFocus)
     return () => window.removeEventListener('focus', handleFocus)
   }, [update])
 
-  // Redirect once role is assigned
+  // Auto-redirect once role is assigned
   useEffect(() => {
-    if (session?.user?.role) {
-      router.push('/dashboard')
-    }
+    if (session?.user?.role) router.push('/dashboard')
   }, [session?.user?.role, router])
 
   return (
-    <Card className="w-full max-w-md text-center shadow-sm">
-      <CardHeader className="pb-4">
-        <div className="flex justify-center mb-3">
-          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
-            <Clock className="size-6 text-muted-foreground" />
-          </div>
-        </div>
-        <CardTitle className="text-xl">Account Pending Approval</CardTitle>
-        <CardDescription className="text-sm">
-          Your account has been created and is awaiting role assignment.
-        </CardDescription>
-      </CardHeader>
+    <div className="flex flex-col items-center gap-6 text-center">
+      {/* Icon */}
+      <div
+        className="h-14 w-14 rounded-full flex items-center justify-center"
+        style={{ background: 'rgba(13,148,136,0.1)' }}
+      >
+        <Clock className="h-7 w-7" style={{ color: '#0D9488' }} />
+      </div>
 
-      <CardContent className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          An administrator will assign your role shortly. This page will automatically
-          redirect you once access has been granted.
+      {/* Copy */}
+      <div className="space-y-2">
+        <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Account Pending</h2>
+        <p className="text-sm text-gray-500 leading-relaxed max-w-xs">
+          Your account is pending approval. Contact your administrator to get access.
         </p>
+      </div>
 
-        <div className="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">
-          Signed in as <span className="font-medium text-foreground">{session?.user?.email}</span>
+      {/* Email pill */}
+      {session?.user?.email && (
+        <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-2.5 text-sm text-gray-600">
+          Signed in as{' '}
+          <span className="font-semibold text-gray-900">{session.user.email}</span>
         </div>
+      )}
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
-          onClick={() => signOut({ callbackUrl: '/login' })}
-        >
-          Sign out
-        </Button>
-      </CardContent>
-    </Card>
+      <p className="text-xs text-gray-400">
+        This page will redirect automatically once access is granted.
+      </p>
+
+      <button
+        onClick={() => signOut({ callbackUrl: '/login' })}
+        className="min-h-[44px] px-6 rounded-lg border border-gray-200 text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition"
+      >
+        Sign out
+      </button>
+    </div>
   )
 }

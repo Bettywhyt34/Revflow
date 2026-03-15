@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { path, fullName, email, password, confirmPassword, companyName, inviteCode } = body
+  const { path, fullName, email, password, confirmPassword, companyName, inviteToken } = body
 
   // ── Basic validation ──────────────────────────────────────────────────────
   if (!path || !fullName || !email || !password) {
@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Passwords do not match.' }, { status: 400 })
   }
 
-  if (path === 'join_org' && !inviteCode) {
-    return NextResponse.json({ error: 'Invite code is required.' }, { status: 400 })
+  if (path === 'join_org' && !inviteToken) {
+    return NextResponse.json({ error: 'Invite token is required.' }, { status: 400 })
   }
 
   if (password.length < 8) {
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   const { data: existing } = await supabase
     .from('users')
     .select('id')
-    .eq('email', email)
+    .eq('email', email.toLowerCase().trim())
     .maybeSingle()
 
   if (existing) {
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   if (path === 'create_org') {
     const { data: org, error: orgError } = await supabase
       .from('organisations')
-      .insert({ name: companyName, country: 'NG', default_currency: 'NGN' })
+      .insert({ name: companyName.trim(), country: 'NG', default_currency: 'NGN' })
       .select('id')
       .single()
 
@@ -55,19 +55,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create organisation.' }, { status: 500 })
     }
 
-    const { data: newUser, error: userError } = await supabase
-      .from('users')
-      .insert({
-        email,
-        full_name: fullName,
-        role: 'admin',
-        org_id: org.id,
-        password_hash: passwordHash,
-      })
-      .select('id')
-      .single()
+    const { error: userError } = await supabase.from('users').insert({
+      email: email.toLowerCase().trim(),
+      full_name: fullName.trim(),
+      role: 'admin',
+      org_id: org.id,
+      password_hash: passwordHash,
+    })
 
-    if (userError || !newUser) {
+    if (userError) {
       console.error('Failed to create user:', userError)
       return NextResponse.json({ error: 'Failed to create user.' }, { status: 500 })
     }
@@ -83,32 +79,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }, { status: 201 })
   }
 
-  // ── Path B: Join existing organisation via invite code ────────────────────
+  // ── Path B: Join via invite token ─────────────────────────────────────────
   if (path === 'join_org') {
     const { data: invite, error: inviteError } = await supabase
       .from('invite_codes')
-      .select('id, org_id, used_at, expires_at')
-      .eq('code', inviteCode.trim().toUpperCase())
+      .select('id, org_id, role, used_at, expires_at')
+      .eq('code', inviteToken.trim())
       .maybeSingle()
 
     if (inviteError || !invite) {
-      return NextResponse.json({ error: 'Invalid invite code.' }, { status: 400 })
+      return NextResponse.json({ error: 'Invalid or expired invite link.' }, { status: 400 })
     }
 
     if (invite.used_at) {
-      return NextResponse.json({ error: 'This invite code has already been used.' }, { status: 400 })
+      return NextResponse.json({ error: 'This invite link has already been used.' }, { status: 400 })
     }
 
     if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      return NextResponse.json({ error: 'This invite code has expired.' }, { status: 400 })
+      return NextResponse.json({ error: 'This invite link has expired.' }, { status: 400 })
     }
 
     const { data: newUser, error: userError } = await supabase
       .from('users')
       .insert({
-        email,
-        full_name: fullName,
-        role: null,  // pending — admin must assign a role
+        email: email.toLowerCase().trim(),
+        full_name: fullName.trim(),
+        role: invite.role ?? null,   // role from invite — null only if invite has no role (shouldn't happen)
         org_id: invite.org_id,
         password_hash: passwordHash,
       })
@@ -120,7 +116,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to create user.' }, { status: 500 })
     }
 
-    // Mark invite code as used
+    // Mark invite as used
     await supabase
       .from('invite_codes')
       .update({ used_by: newUser.id, used_at: new Date().toISOString() })
