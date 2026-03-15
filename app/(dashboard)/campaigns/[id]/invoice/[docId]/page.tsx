@@ -6,48 +6,33 @@ import { getDocumentById } from '@/lib/data/documents'
 import { getOrgBankAccounts, getOrgSettingsWithDefaults } from '@/lib/data/settings'
 import { createAdminClient } from '@/lib/supabase'
 import type { UserRole, OrgBankAccount } from '@/types'
-import SendProformaButton from './send-button'
+import InvoiceSendButton from './send-button'
 
 function fmt(amount: number | null, currency = 'NGN'): string {
   if (amount == null) return '—'
   return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
+    style: 'currency', currency, minimumFractionDigits: 2,
   }).format(amount)
 }
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
+  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 function fmtDateTime(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ id: string; docId: string }>
-}) {
-  const { docId } = await params
-  void docId
-  return { title: `Proforma — Revflow` }
+export async function generateMetadata({ params }: { params: Promise<{ id: string; docId: string }> }) {
+  void (await params)
+  return { title: `Invoice — Revflow` }
 }
 
-export default async function ViewProformaPage({
+export default async function ViewInvoicePage({
   params,
 }: {
   params: Promise<{ id: string; docId: string }>
@@ -60,14 +45,14 @@ export default async function ViewProformaPage({
   const doc = await getDocumentById(docId, orgId)
   if (!doc) notFound()
   if (doc.campaign.id !== id) notFound()
+  if (doc.type !== 'invoice') notFound()
 
   const campaign = doc.campaign
   const isSent = !!doc.sent_at
   const isDraft = doc.status === 'draft'
-  const canSend = role === 'admin' || role === 'planner'
+  const canSend = role === 'admin' || role === 'finance_exec'
   const showAgencyFee = (doc.agency_fee_amount ?? 0) > 0
 
-  // Fetch bank accounts and resolve display account
   const [bankAccounts, orgSettings, clientRow] = await Promise.all([
     getOrgBankAccounts(orgId),
     getOrgSettingsWithDefaults(orgId),
@@ -84,7 +69,6 @@ export default async function ViewProformaPage({
     (clientRow.data as { preferred_bank_account_id?: string | null } | null)
       ?.preferred_bank_account_id ?? null
 
-  // Resolve display bank account: client preferred → org default
   let displayBankAccount: OrgBankAccount | null = null
   if (clientPreferredBankAccountId) {
     displayBankAccount = bankAccounts.find((a) => a.id === clientPreferredBankAccountId) ?? null
@@ -93,9 +77,10 @@ export default async function ViewProformaPage({
     displayBankAccount = bankAccounts.find((a) => a.is_default) ?? bankAccounts[0] ?? null
   }
 
+  const pc = orgSettings.primary_color ?? '#0D9488'
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-6">
-      {/* Back nav */}
       <Link
         href={`/campaigns/${id}`}
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors min-h-[44px]"
@@ -104,7 +89,6 @@ export default async function ViewProformaPage({
         Back to campaign
       </Link>
 
-      {/* Status banner */}
       {isSent ? (
         <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
           <CheckCircle className="h-4 w-4 flex-shrink-0" />
@@ -117,68 +101,42 @@ export default async function ViewProformaPage({
         </div>
       )}
 
-      {/* Proforma document */}
+      {/* Invoice document */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {/* Header */}
         <div className="px-8 py-6 flex flex-col sm:flex-row sm:justify-between gap-4 items-start">
           <div>
             {orgSettings.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={orgSettings.logo_url}
-                alt={orgSettings.org_name ?? 'Logo'}
-                className="h-12 max-w-[160px] object-contain mb-1"
-              />
+              <img src={orgSettings.logo_url} alt={orgSettings.org_name ?? 'Logo'} className="h-12 max-w-[160px] object-contain mb-1" />
             ) : (
-              <div
-                className="text-2xl font-extrabold tracking-tight"
-                style={{ color: orgSettings.primary_color }}
-              >
+              <div className="text-2xl font-extrabold tracking-tight" style={{ color: pc }}>
                 {orgSettings.org_name ?? 'QVT MEDIA'}
               </div>
             )}
           </div>
           <div className="sm:text-right">
-            <div
-              className="text-lg font-bold"
-              style={{ color: '#1a1a4e' }}
-            >
-              PROFORMA INVOICE
-            </div>
-            <div
-              className="text-sm mt-1 font-semibold"
-              style={{ color: orgSettings.primary_color }}
-            >
-              {doc.document_number}
-            </div>
+            <div className="text-lg font-bold" style={{ color: '#1a1a4e' }}>TAX INVOICE</div>
+            <div className="text-sm mt-1 font-semibold" style={{ color: pc }}>{doc.document_number}</div>
             <div className="text-xs text-gray-500 mt-1">
               Date: {fmtDate(doc.issue_date)}<br />
-              Valid Until: {fmtDate(doc.due_date)}
+              Due: {fmtDate(doc.due_date)}
             </div>
           </div>
         </div>
-        {/* Brand divider */}
-        <div
-          className="mx-8 mb-0"
-          style={{ height: 2, backgroundColor: orgSettings.primary_color }}
-        />
+        <div className="mx-8 mb-0" style={{ height: 2, backgroundColor: pc }} />
 
-        {/* Body */}
         <div className="px-8 py-7 space-y-6">
-          {/* Bill To + Recognition Period */}
+          {/* Bill To */}
           <div className="flex flex-col sm:flex-row sm:justify-between gap-4">
             <div>
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Bill To</div>
               <div className="font-bold text-gray-900 text-base">{doc.recipient_name ?? campaign.advertiser}</div>
-              {doc.recipient_email && (
-                <div className="text-sm text-gray-500 mt-0.5">{doc.recipient_email}</div>
-              )}
+              {doc.recipient_email && <div className="text-sm text-gray-500 mt-0.5">{doc.recipient_email}</div>}
             </div>
             <div className="sm:text-right">
-              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
-                Recognition Period
-              </div>
-              <div className="text-sm font-semibold" style={{ color: orgSettings.primary_color }}>
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Recognition Period</div>
+              <div className="text-sm font-semibold" style={{ color: pc }}>
                 {doc.recognition_period_start && doc.recognition_period_end
                   ? `${fmtDate(doc.recognition_period_start)} – ${fmtDate(doc.recognition_period_end)}`
                   : '— not set —'}
@@ -186,7 +144,6 @@ export default async function ViewProformaPage({
             </div>
           </div>
 
-          {/* Campaign reference */}
           <div>
             <div className="text-xs text-gray-400 mb-0.5">RE: Ref {campaign.tracker_id}</div>
             <div className="font-bold text-gray-900 text-lg">{campaign.title}</div>
@@ -202,20 +159,26 @@ export default async function ViewProformaPage({
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-gray-100">
-                <td className="py-3.5 text-gray-400 text-sm">1</td>
-                <td className="py-3.5 text-gray-700">
-                  {campaign.title}
-                  {doc.recognition_period_start && doc.recognition_period_end && (
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {fmtDate(doc.recognition_period_start)} – {fmtDate(doc.recognition_period_end)}
-                    </div>
-                  )}
-                </td>
-                <td className="py-3.5 text-right font-medium text-gray-800">
-                  {fmt(doc.amount_before_vat, doc.currency)}
-                </td>
-              </tr>
+              {(doc.line_items ?? []).length > 0
+                ? doc.line_items.map((item, idx) => (
+                    <tr key={idx} className="border-b border-gray-100">
+                      <td className="py-3.5 text-gray-400 text-sm">{item.qty}</td>
+                      <td className="py-3.5 text-gray-700">{item.description}</td>
+                      <td className="py-3.5 text-right font-medium text-gray-800">
+                        {fmt(item.line_total, doc.currency)}
+                      </td>
+                    </tr>
+                  ))
+                : (
+                    <tr className="border-b border-gray-100">
+                      <td className="py-3.5 text-gray-400 text-sm">1</td>
+                      <td className="py-3.5 text-gray-700">{campaign.title}</td>
+                      <td className="py-3.5 text-right font-medium text-gray-800">
+                        {fmt(doc.amount_before_vat, doc.currency)}
+                      </td>
+                    </tr>
+                  )
+              }
             </tbody>
           </table>
 
@@ -227,50 +190,28 @@ export default async function ViewProformaPage({
                   <td className="py-2 text-gray-500">Subtotal</td>
                   <td className="py-2 text-right text-gray-700">{fmt(doc.amount_before_vat, doc.currency)}</td>
                 </tr>
-                {showAgencyFee && (
-                  <tr>
-                    <td className="py-2 text-gray-500">Agency Commission ({campaign.agency_fee_pct}%)</td>
-                    <td className="py-2 text-right text-gray-700">{fmt(doc.agency_fee_amount, doc.currency)}</td>
-                  </tr>
-                )}
                 <tr>
                   <td className="py-2 text-gray-500">VAT @ 7.5%</td>
                   <td className="py-2 text-right text-gray-700">{fmt(doc.vat_amount, doc.currency)}</td>
                 </tr>
-                <tr className="border-t-2" style={{ borderColor: orgSettings.primary_color }}>
+                <tr className="border-t-2" style={{ borderColor: pc }}>
                   <td className="pt-3 font-bold text-gray-900 text-base">Total Due</td>
-                  <td className="pt-3 text-right font-bold text-gray-900 text-base">
-                    {fmt(doc.total_amount, doc.currency)}
-                  </td>
+                  <td className="pt-3 text-right font-bold text-gray-900 text-base">{fmt(doc.total_amount, doc.currency)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          {/* Payment callout */}
           {doc.due_date && (
-            <div
-              className="rounded-lg px-5 py-3"
-              style={{
-                backgroundColor: orgSettings.primary_color + '18',
-                border: `1px solid ${orgSettings.primary_color}40`,
-              }}
-            >
-              <span
-                className="text-sm font-semibold"
-                style={{ color: orgSettings.primary_color }}
-              >
+            <div className="rounded-lg px-5 py-3" style={{ backgroundColor: pc + '18', border: `1px solid ${pc}40` }}>
+              <span className="text-sm font-semibold" style={{ color: pc }}>
                 Payment due by {fmtDate(doc.due_date)}
               </span>
-              <span className="text-sm text-gray-500 ml-1">(30 days from invoice date)</span>
             </div>
           )}
 
           {doc.notes && (
-            <div
-              className="bg-gray-50 px-4 py-3 text-sm text-gray-600 rounded-r-lg border-l-4"
-              style={{ borderColor: orgSettings.primary_color }}
-            >
+            <div className="bg-gray-50 px-4 py-3 text-sm text-gray-600 rounded-r-lg border-l-4" style={{ borderColor: pc }}>
               <span className="font-semibold">Notes:</span> {doc.notes}
             </div>
           )}
@@ -294,20 +235,16 @@ export default async function ViewProformaPage({
                 )}
               </dl>
             ) : (
-              <p className="text-sm text-gray-400 italic">
-                Not configured — add bank accounts in Settings → Documents.
-              </p>
+              <p className="text-sm text-gray-400 italic">Not configured — add bank accounts in Settings → Documents.</p>
             )}
           </div>
 
           <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
-            This is a proforma invoice. Payment constitutes acceptance of the booking.
             For enquiries: billing@revflowapp.com
           </p>
         </div>
       </div>
 
-      {/* Send button */}
       {canSend && (
         <div className="flex justify-end gap-3 flex-wrap">
           <Link
@@ -319,8 +256,8 @@ export default async function ViewProformaPage({
             Back to Campaign
           </Link>
           <a
-            href={`/api/proforma/${docId}/pdf`}
-            download={`proforma-${doc.document_number}.pdf`}
+            href={`/api/invoice/${docId}/pdf`}
+            download={`invoice-${doc.document_number}.pdf`}
             className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5
               rounded-lg text-sm font-medium border border-gray-200 text-gray-700
               hover:bg-gray-50 transition"
@@ -328,7 +265,7 @@ export default async function ViewProformaPage({
             <Download className="h-4 w-4" />
             Download PDF
           </a>
-          <SendProformaButton
+          <InvoiceSendButton
             docId={docId}
             campaignId={id}
             isSent={isSent}

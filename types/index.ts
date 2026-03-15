@@ -123,5 +123,6 @@ export interface CampaignWithRelations extends Campaign {
     email: string | null
     cc_emails: string[]
     address: string | null
+    payment_terms: string | null
   } | null
 }

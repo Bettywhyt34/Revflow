@@ -22,6 +22,7 @@ export interface ProformaInvoiceData {
   orgName: string
   logoUrl: string | null
   primaryColor: string
+  documentTitle?: string   // defaults to "PROFORMA INVOICE"
   invoiceNumber: string
   issueDate: string
   recipientName: string
@@ -271,7 +272,7 @@ export default function ProformaInvoicePDF({ data }: { data: ProformaInvoiceData
             )}
           </View>
           <View>
-            <Text style={styles.proformaTitle}>PROFORMA INVOICE</Text>
+            <Text style={styles.proformaTitle}>{data.documentTitle ?? 'PROFORMA INVOICE'}</Text>
           </View>
         </View>
 

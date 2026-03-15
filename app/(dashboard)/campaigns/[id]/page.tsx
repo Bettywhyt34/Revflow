@@ -9,7 +9,7 @@ import {
 import { getDocumentsByCampaign } from '@/lib/data/documents'
 import StatusBadge from '@/components/campaigns/status-badge'
 import NextActionBadge from '@/components/campaigns/next-action-badge'
-import { ArrowLeft, Calendar, User, FileText, Bell, ClipboardCheck, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Calendar, User, FileText, Bell, ClipboardCheck, AlertTriangle, Download } from 'lucide-react'
 import type { CampaignStatus, UserRole } from '@/types'
 import CampaignActions from './campaign-actions'
 
@@ -92,6 +92,7 @@ export default async function CampaignDetailPage({
 
   const status = campaign.status as CampaignStatus
   const plannedValue = campaign.planned_contract_value
+  const poDoc = documents.find((d) => d.type === 'purchase_order') ?? null
   // Final billable = planned until compliance is uploaded
   const finalBillable = plannedValue
   const balance = finalBillable != null ? finalBillable - totalPaid : null
@@ -174,9 +175,50 @@ export default async function CampaignDetailPage({
             campaignId={campaign.id}
             status={status}
             userRole={userRole}
+            trackerID={campaign.tracker_id}
+            campaignTitle={campaign.title}
+            currency={campaign.currency ?? 'NGN'}
+            plannedValue={campaign.planned_contract_value}
           />
         </div>
       </div>
+
+      {/* PO Details card */}
+      {campaign.po_number && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">PO Details</p>
+              <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                <div>
+                  <dt className="text-xs text-gray-400">PO Number</dt>
+                  <dd className="font-semibold text-gray-900">{campaign.po_number}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-400">Date</dt>
+                  <dd className="text-gray-900">{formatDate(campaign.po_received_date)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-400">Amount</dt>
+                  <dd className="text-gray-900">{formatCurrency(campaign.po_amount, campaign.currency)}</dd>
+                </div>
+              </dl>
+            </div>
+            {poDoc?.file_path && (
+              <a
+                href={`/api/documents/${poDoc.id}/download`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-lg
+                  border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition flex-shrink-0"
+              >
+                <Download className="h-4 w-4" />
+                Download PO
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* KPI bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -240,12 +282,18 @@ export default async function CampaignDetailPage({
                   compliance: 'Compliance',
                 }
                 const isSent = !!doc.sent_at
-                return (
-                  <Link
-                    key={doc.id}
-                    href={`/campaigns/${id}/proforma/${doc.id}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors group"
-                  >
+
+                const docHref =
+                  doc.type === 'proforma_invoice'
+                    ? `/campaigns/${id}/proforma/${doc.id}`
+                    : doc.type === 'invoice'
+                      ? `/campaigns/${id}/invoice/${doc.id}`
+                      : doc.type === 'purchase_order' && doc.file_path
+                        ? `/api/documents/${doc.id}/download`
+                        : null
+
+                const rowContent = (
+                  <>
                     <div className="flex items-center gap-3 min-w-0">
                       <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
                       <div className="min-w-0">
@@ -263,15 +311,30 @@ export default async function CampaignDetailPage({
                       )}
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          isSent
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-amber-100 text-amber-700'
+                          isSent ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
                         }`}
                       >
                         {isSent ? 'Sent' : 'Draft'}
                       </span>
                     </div>
+                  </>
+                )
+
+                return docHref ? (
+                  <Link
+                    key={doc.id}
+                    href={docHref}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors group"
+                  >
+                    {rowContent}
                   </Link>
+                ) : (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-4 py-3"
+                  >
+                    {rowContent}
+                  </div>
                 )
               })}
             </div>

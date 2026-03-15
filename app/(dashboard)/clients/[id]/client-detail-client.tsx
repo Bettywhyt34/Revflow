@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Pencil } from 'lucide-react'
 import ClientForm from '@/components/clients/client-form'
 import type { Client, OrgBankAccount } from '@/types'
@@ -14,6 +15,7 @@ export default function ClientDetailClient({
   canEdit: boolean
   bankAccounts?: OrgBankAccount[]
 }) {
+  const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [localClient, setLocalClient] = useState(client)
 
@@ -31,6 +33,7 @@ export default function ClientDetailClient({
           onSuccess={(_, name) => {
             setLocalClient((prev) => ({ ...prev, client_name: name }))
             setEditing(false)
+            router.refresh()
           }}
           onCancel={() => setEditing(false)}
         />
@@ -56,6 +59,7 @@ export default function ClientDetailClient({
 
       <dl className="space-y-3 text-sm">
         <Row label="Company" value={localClient.client_name} bold />
+        <Row label="Customer ID" value={localClient.customer_id} />
         <Row label="Contact" value={localClient.contact_person} />
         <Row label="Email" value={localClient.email} />
         <Row label="Phone" value={localClient.phone} />

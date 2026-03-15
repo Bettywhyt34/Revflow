@@ -1,6 +1,5 @@
 'use server'
 
-import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
@@ -13,14 +12,15 @@ import { Resend } from 'resend'
 
 const VAT_RATE = 0.075
 
+// Allowed source statuses for creating a direct invoice
+const ALLOWED_STATUSES = ['plan_submitted', 'proforma_sent', 'po_received']
+
 async function resolveBankAccount(
   bankAccountId: string | null | undefined,
   clientId: string | null | undefined,
   orgId: string,
 ): Promise<OrgBankAccount | null> {
   const supabase = createAdminClient()
-
-  // 1. Explicit override
   if (bankAccountId) {
     const { data } = await supabase
       .from('org_bank_accounts')
@@ -30,8 +30,6 @@ async function resolveBankAccount(
       .maybeSingle()
     if (data) return data as OrgBankAccount
   }
-
-  // 2. Client preferred
   if (clientId) {
     const { data: client } = await supabase
       .from('clients')
@@ -50,60 +48,42 @@ async function resolveBankAccount(
       if (data) return data as OrgBankAccount
     }
   }
-
-  // 3. Org default
   return getDefaultBankAccount(orgId)
 }
 
-function calcFinancials(
-  amountBeforeVat: number,
-  includeAgencyFee: boolean,
-  agencyFeePct: number,
-) {
-  const agencyFeeAmount = includeAgencyFee
-    ? Math.round(amountBeforeVat * (agencyFeePct / 100) * 100) / 100
-    : 0
-  const vatBase = amountBeforeVat + agencyFeeAmount
-  const vatAmount = Math.round(vatBase * VAT_RATE * 100) / 100
-  const totalAmount = Math.round((vatBase + vatAmount) * 100) / 100
-  return { agencyFeeAmount, vatAmount, totalAmount }
-}
-
-// ── Create (save as draft) ──────────────────────────────────────────────────
-
-export interface ProformaLineItem {
+export interface InvoiceLineItem {
   qty: number
   description: string
   unit_price: number
   line_total: number
 }
 
-export interface CreateProformaInput {
+export interface CreateInvoiceInput {
   campaignId: string
   recipientName: string
   recipientEmail: string
   ccEmails: string[]
-  recognitionStart: string   // YYYY-MM-DD
-  recognitionEnd: string     // YYYY-MM-DD
-  lineItems: ProformaLineItem[]
+  recognitionStart: string
+  recognitionEnd: string
+  lineItems: InvoiceLineItem[]
   invoiceSubject: string
-  issueDateOverride?: string // YYYY-MM-DD, defaults to today
-  paymentTermsDays: number   // e.g. 30
+  issueDateOverride?: string
+  paymentTermsDays: number
   notes: string
+  mpoFilePath?: string | null   // path in Supabase Storage if uploaded
 }
 
-export async function createProformaAction(
-  input: CreateProformaInput,
+export async function createInvoiceAction(
+  input: CreateInvoiceInput,
 ): Promise<{ error?: string; docId?: string; docNumber?: string }> {
   const session = await auth()
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
   const { role, orgId } = session.user
-  if (role !== 'admin' && role !== 'planner') return { error: 'Insufficient permissions.' }
+  if (role !== 'admin' && role !== 'finance_exec') return { error: 'Insufficient permissions.' }
 
   const supabase = createAdminClient()
 
-  // Verify campaign belongs to org and is in plan_submitted status
   const { data: campaign } = await supabase
     .from('campaigns')
     .select('id, status, currency')
@@ -112,16 +92,15 @@ export async function createProformaAction(
     .maybeSingle()
 
   if (!campaign) return { error: 'Campaign not found.' }
-  if (campaign.status !== 'plan_submitted') {
-    return { error: 'Campaign is not in plan_submitted status.' }
+  if (!ALLOWED_STATUSES.includes(campaign.status)) {
+    return { error: 'Campaign is not in an eligible status to create an invoice.' }
   }
 
-  // Derive totals from line items
   const subtotal = input.lineItems.reduce((s, i) => s + i.line_total, 0)
   const vatAmount = Math.round(subtotal * VAT_RATE * 100) / 100
   const totalAmount = Math.round((subtotal + vatAmount) * 100) / 100
 
-  const docNumber = await getNextDocumentNumber(orgId, 'proforma_invoice')
+  const docNumber = await getNextDocumentNumber(orgId, 'invoice')
   const issueDate = input.issueDateOverride ?? new Date().toISOString().split('T')[0]
   const dueDate = new Date(
     new Date(issueDate).getTime() + input.paymentTermsDays * 86400 * 1000,
@@ -133,7 +112,7 @@ export async function createProformaAction(
     .from('documents')
     .insert({
       campaign_id: input.campaignId,
-      type: 'proforma_invoice',
+      type: 'invoice',
       status: 'draft',
       document_number: docNumber,
       version: 1,
@@ -151,39 +130,41 @@ export async function createProformaAction(
       recipient_name: input.recipientName,
       cc_emails: input.ccEmails ?? [],
       notes: input.notes || null,
-      terms: `Payment due within ${input.paymentTermsDays} days of invoice date.`,
+      terms: input.paymentTermsDays === 0
+        ? 'Payment due on receipt.'
+        : `Payment due within ${input.paymentTermsDays} days of invoice date.`,
       line_items: input.lineItems,
       invoice_subject: input.invoiceSubject || null,
+      file_path: input.mpoFilePath ?? null,
       created_by: session.user.id,
     })
     .select('id')
     .single()
 
   if (insertErr) {
-    console.error('createProforma insert error:', insertErr)
-    return { error: 'Failed to save proforma.' }
+    console.error('createInvoice insert error:', insertErr)
+    return { error: 'Failed to save invoice.' }
   }
 
   revalidatePath(`/campaigns/${input.campaignId}`)
-  return { docId: doc.id, docNumber: docNumber }
+  return { docId: doc.id, docNumber }
 }
 
 // ── Send ────────────────────────────────────────────────────────────────────
 
-export async function sendProformaAction(
+export async function sendInvoiceAction(
   docId: string,
   campaignId: string,
   params: SendDocumentParams,
-): Promise<{ error: string } | never> {
+): Promise<{ error?: string }> {
   const session = await auth()
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
   const { role, orgId } = session.user
-  if (role !== 'admin' && role !== 'planner') return { error: 'Insufficient permissions.' }
+  if (role !== 'admin' && role !== 'finance_exec') return { error: 'Insufficient permissions.' }
 
   const supabase = createAdminClient()
 
-  // Fetch document + campaign in one query
   const { data: doc } = await supabase
     .from('documents')
     .select(
@@ -198,23 +179,13 @@ export async function sendProformaAction(
   if (!doc) return { error: 'Document not found.' }
 
   const campaign = doc.campaign as {
-    id: string
-    title: string
-    advertiser: string
-    tracker_id: string
-    campaign_type: string
-    agency_fee_pct: number
-    currency: string
-    org_id: string
-    status: string
-    client_id: string | null
+    id: string; title: string; advertiser: string; tracker_id: string;
+    campaign_type: string; agency_fee_pct: number; currency: string;
+    org_id: string; status: string; client_id: string | null
   }
 
   if (campaign.org_id !== orgId) return { error: 'Document not found.' }
   if (!params.sentTo) return { error: 'Recipient email is required.' }
-  if (!doc.recognition_period_start || !doc.recognition_period_end) {
-    return { error: 'Recognition period is required before sending.' }
-  }
 
   const bankAccount = await resolveBankAccount(params.bankAccountId, campaign.client_id, orgId)
 
@@ -226,12 +197,12 @@ export async function sendProformaAction(
     recipientName: params.recipientName || doc.recipient_name || campaign.advertiser,
     campaignTitle: campaign.title,
     trackerID: campaign.tracker_id,
-    recognitionStart: doc.recognition_period_start,
-    recognitionEnd: doc.recognition_period_end,
+    recognitionStart: doc.recognition_period_start ?? '',
+    recognitionEnd: doc.recognition_period_end ?? '',
     amountBeforeVat: doc.amount_before_vat ?? 0,
-    includeAgencyFee: (doc.agency_fee_amount ?? 0) > 0,
-    agencyFeePct: campaign.agency_fee_pct ?? 10,
-    agencyFeeAmount: doc.agency_fee_amount ?? 0,
+    includeAgencyFee: false,
+    agencyFeePct: 0,
+    agencyFeeAmount: 0,
     vatAmount: doc.vat_amount ?? 0,
     totalAmount: doc.total_amount ?? 0,
     currency: doc.currency ?? 'NGN',
@@ -243,22 +214,29 @@ export async function sendProformaAction(
     bankCode: bankAccount?.bank_code ?? null,
   })
 
-  // Send via Resend
   const resend = new Resend(process.env.RESEND_API_KEY)
 
-  const extraAttachments = (params.attachments ?? []).map((a) => ({
-    filename: a.name,
-    path: a.url,
-  }))
+  const attachments = (params.attachments ?? []).map((a) => ({ filename: a.name, path: a.url }))
+
+  // Include MPO attachment if stored
+  if (doc.file_path) {
+    const supabaseAdmin = createAdminClient()
+    const { data: signedUrl } = await supabaseAdmin.storage
+      .from('campaign-documents')
+      .createSignedUrl(doc.file_path, 3600)
+    if (signedUrl?.signedUrl) {
+      attachments.push({ filename: 'MPO.pdf', path: signedUrl.signedUrl })
+    }
+  }
 
   const { error: emailErr } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL ?? 'notifications@revflowapp.com',
     to: params.sentTo,
     ...(params.ccEmails.length > 0 ? { cc: params.ccEmails } : {}),
     ...(params.bccEmails.length > 0 ? { bcc: params.bccEmails } : {}),
-    subject: params.subject || `Proforma Invoice ${doc.document_number} — ${campaign.title}`,
+    subject: params.subject || `Invoice ${doc.document_number} — ${campaign.title}`,
     html,
-    ...(extraAttachments.length > 0 ? { attachments: extraAttachments } : {}),
+    ...(attachments.length > 0 ? { attachments } : {}),
   })
 
   if (emailErr) {
@@ -266,7 +244,6 @@ export async function sendProformaAction(
     return { error: 'Failed to send email. Check RESEND_API_KEY.' }
   }
 
-  // Mark document as sent, update recipient fields and metadata
   await supabase
     .from('documents')
     .update({
@@ -281,106 +258,27 @@ export async function sendProformaAction(
     })
     .eq('id', docId)
 
-  // Advance campaign status
   await supabase
     .from('campaigns')
-    .update({ status: 'proforma_sent' })
+    .update({ status: 'invoice_sent' })
     .eq('id', campaign.id)
     .eq('org_id', orgId)
 
-  // Create notification
   await supabase.from('notifications').insert({
     org_id: orgId,
     campaign_id: campaign.id,
-    type: 'approval_required',
-    title: `Proforma ${doc.document_number} sent`,
-    message: `Proforma sent to ${params.sentTo}. Awaiting PO from client.`,
+    type: 'invoice_due',
+    title: `Invoice ${doc.document_number} sent`,
+    message: `Invoice sent to ${params.sentTo}. Awaiting payment.`,
   })
 
   revalidatePath(`/campaigns/${campaign.id}`)
-  redirect(`/campaigns/${campaign.id}`)
-}
-
-// ── Mark as Sent (no email) ───────────────────────────────────────────────────
-
-export async function markDocumentAsSentAction(
-  docId: string,
-  campaignId: string,
-): Promise<{ error?: string }> {
-  const session = await auth()
-  if (!session?.user?.id) return { error: 'Not authenticated.' }
-
-  const { role, orgId } = session.user
-  if (role !== 'admin' && role !== 'planner' && role !== 'finance_exec') {
-    return { error: 'Insufficient permissions.' }
-  }
-
-  const supabase = createAdminClient()
-
-  const { data: doc } = await supabase
-    .from('documents')
-    .select('id, status, type, campaign:campaign_id(org_id)')
-    .eq('id', docId)
-    .maybeSingle()
-
-  if (!doc) return { error: 'Document not found.' }
-  const campaign = doc.campaign as unknown as { org_id: string } | null
-  if (campaign?.org_id !== orgId) return { error: 'Document not found.' }
-  if (doc.status !== 'draft') return { error: 'Only draft documents can be marked as sent.' }
-
-  await supabase
-    .from('documents')
-    .update({ status: 'current', sent_at: new Date().toISOString(), sent_by: session.user.id })
-    .eq('id', docId)
-
-  // Advance campaign status based on document type
-  const newStatus = doc.type === 'invoice' ? 'invoice_sent' : 'proforma_sent'
-  await supabase
-    .from('campaigns')
-    .update({ status: newStatus })
-    .eq('id', campaignId)
-    .eq('org_id', orgId)
-
-  revalidatePath(`/campaigns/${campaignId}`)
-  return {}
-}
-
-// ── Delete Draft ────────────────────────────────────────────────────────────
-
-export async function deleteDocumentAction(
-  docId: string,
-  campaignId: string,
-): Promise<{ error?: string }> {
-  const session = await auth()
-  if (!session?.user?.id) return { error: 'Not authenticated.' }
-
-  const { role, orgId } = session.user
-  if (role !== 'admin' && role !== 'planner' && role !== 'finance_exec') {
-    return { error: 'Insufficient permissions.' }
-  }
-
-  const supabase = createAdminClient()
-
-  const { data: doc } = await supabase
-    .from('documents')
-    .select('id, status, campaign:campaign_id(org_id)')
-    .eq('id', docId)
-    .maybeSingle()
-
-  if (!doc) return { error: 'Document not found.' }
-  const campaign = doc.campaign as unknown as { org_id: string } | null
-  if (campaign?.org_id !== orgId) return { error: 'Document not found.' }
-  if (doc.status !== 'draft') return { error: 'Only draft documents can be deleted.' }
-
-  await supabase.from('documents').delete().eq('id', docId)
-
-  revalidatePath(`/campaigns/${campaignId}`)
   return {}
 }
 
 // ── Preview ──────────────────────────────────────────────────────────────────
 
-export async function getProformaPreviewAction(
+export async function getInvoicePreviewAction(
   docId: string,
   recipientName: string,
   messageBody: string,
@@ -406,22 +304,12 @@ export async function getProformaPreviewAction(
   if (!doc) return { error: 'Document not found.' }
 
   const campaign = doc.campaign as {
-    id: string
-    title: string
-    advertiser: string
-    tracker_id: string
-    campaign_type: string
-    agency_fee_pct: number
-    currency: string
-    org_id: string
-    status: string
-    client_id: string | null
+    id: string; title: string; advertiser: string; tracker_id: string;
+    campaign_type: string; agency_fee_pct: number; currency: string;
+    org_id: string; status: string; client_id: string | null
   }
 
   if (campaign.org_id !== orgId) return { error: 'Document not found.' }
-  if (!doc.recognition_period_start || !doc.recognition_period_end) {
-    return { error: 'Recognition period is required.' }
-  }
 
   const bankAccount = await resolveBankAccount(bankAccountId, campaign.client_id, orgId)
 
@@ -433,12 +321,12 @@ export async function getProformaPreviewAction(
     recipientName: recipientName || doc.recipient_name || campaign.advertiser,
     campaignTitle: campaign.title,
     trackerID: campaign.tracker_id,
-    recognitionStart: doc.recognition_period_start,
-    recognitionEnd: doc.recognition_period_end,
+    recognitionStart: doc.recognition_period_start ?? '',
+    recognitionEnd: doc.recognition_period_end ?? '',
     amountBeforeVat: doc.amount_before_vat ?? 0,
-    includeAgencyFee: (doc.agency_fee_amount ?? 0) > 0,
-    agencyFeePct: campaign.agency_fee_pct ?? 10,
-    agencyFeeAmount: doc.agency_fee_amount ?? 0,
+    includeAgencyFee: false,
+    agencyFeePct: 0,
+    agencyFeeAmount: 0,
     vatAmount: doc.vat_amount ?? 0,
     totalAmount: doc.total_amount ?? 0,
     currency: doc.currency ?? 'NGN',

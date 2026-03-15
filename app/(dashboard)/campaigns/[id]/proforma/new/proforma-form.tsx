@@ -271,6 +271,7 @@ export default function ProformaForm({
   clientName,
   clientAddress,
   clientCustomerId,
+  clientPaymentTermsDays,
 }: {
   campaignId: string
   campaign: Campaign
@@ -279,6 +280,7 @@ export default function ProformaForm({
   clientName?: string | null
   clientAddress?: string | null
   clientCustomerId?: string | null
+  clientPaymentTermsDays?: number | null
 }) {
   const { primaryColor, logoUrl: orgLogoUrl, orgName } = useOrgSettings()
   const [isPending, startTransition] = useTransition()
@@ -321,7 +323,9 @@ export default function ProformaForm({
 
   // Issue date / payment terms
   const [issueDate, setIssueDate] = useState(today())
-  const [paymentTermsDays] = useState(30)
+  const [paymentTermsDays, setPaymentTermsDays] = useState(
+    clientPaymentTermsDays ?? 30,
+  )
   const [notes, setNotes] = useState('')
 
   const dueDate = issueDate ? addDays(issueDate, paymentTermsDays) : ''
@@ -661,6 +665,23 @@ export default function ProformaForm({
             </div>
 
             <div>
+              <Label>Payment Terms</Label>
+              <select
+                value={paymentTermsDays}
+                onChange={(e) => setPaymentTermsDays(Number(e.target.value))}
+                className="w-full min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm
+                  text-gray-900 bg-white focus:outline-none focus:ring-2 focus:border-transparent transition"
+                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+              >
+                <option value={0}>Due on Receipt</option>
+                <option value={15}>Net 15</option>
+                <option value={30}>Net 30</option>
+                <option value={45}>Net 45</option>
+                <option value={60}>Net 60</option>
+              </select>
+            </div>
+
+            <div>
               <Label>Due Date</Label>
               <Input
                 type="date"
@@ -668,7 +689,6 @@ export default function ProformaForm({
                 readOnly
                 className="bg-gray-50 text-gray-500 cursor-not-allowed"
               />
-              <p className="text-xs text-gray-400 mt-1">30 days from issue date</p>
             </div>
 
             <div>
