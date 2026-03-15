@@ -5,23 +5,44 @@ import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
 
+// Legacy action kept for backwards compatibility (FormData signature)
 export async function createCampaignAction(
   _prevState: unknown,
   formData: FormData,
 ): Promise<{ error: string } | never> {
-  const session = await auth()
-  if (!session?.user?.id || !session.user.orgId) {
-    return { error: 'Not authenticated.' }
-  }
-
   const advertiser = (formData.get('advertiser') as string)?.trim()
   const title = (formData.get('title') as string)?.trim()
   const financeExecId = (formData.get('finance_exec_id') as string) || null
   const planReference = (formData.get('plan_reference') as string)?.trim() || null
   const notes = (formData.get('notes') as string)?.trim() || null
 
-  if (!advertiser) return { error: 'Client name is required.' }
-  if (!title) return { error: 'Campaign name is required.' }
+  return createCampaignWithClientAction({
+    clientId: null,
+    advertiser: advertiser ?? '',
+    title: title ?? '',
+    financeExecId,
+    planReference,
+    notes,
+  })
+}
+
+export async function createCampaignWithClientAction(input: {
+  clientId: string | null
+  advertiser: string
+  title: string
+  financeExecId: string | null
+  planReference: string | null
+  notes: string | null
+}): Promise<{ error: string } | never> {
+  const session = await auth()
+  if (!session?.user?.id || !session.user.orgId) {
+    return { error: 'Not authenticated.' }
+  }
+
+  const { advertiser, title } = input
+
+  if (!advertiser.trim()) return { error: 'Client name is required.' }
+  if (!title.trim()) return { error: 'Campaign name is required.' }
 
   const supabase = createAdminClient()
 
@@ -29,12 +50,13 @@ export async function createCampaignAction(
     .from('campaigns')
     .insert({
       org_id: session.user.orgId,
-      tracker_id: '',          // trigger auto-assigns TRK-XXX
-      title,
-      advertiser,
-      plan_reference: planReference,
-      notes,
-      account_manager_id: financeExecId,
+      tracker_id: '',
+      title: title.trim(),
+      advertiser: advertiser.trim(),
+      client_id: input.clientId || null,
+      plan_reference: input.planReference,
+      notes: input.notes,
+      account_manager_id: input.financeExecId,
       status: 'plan_submitted',
       campaign_type: 'direct',
       created_by: session.user.id,
@@ -47,11 +69,10 @@ export async function createCampaignAction(
     return { error: 'Failed to create campaign. Please try again.' }
   }
 
-  // Notify assigned finance exec
-  if (financeExecId) {
+  if (input.financeExecId) {
     await supabase.from('notifications').insert({
       org_id: session.user.orgId,
-      user_id: financeExecId,
+      user_id: input.financeExecId,
       campaign_id: campaign.id,
       type: 'system',
       title: 'Campaign Assigned',

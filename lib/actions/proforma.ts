@@ -30,6 +30,7 @@ export interface CreateProformaInput {
   campaignId: string
   recipientName: string
   recipientEmail: string
+  ccEmails: string[]
   recognitionStart: string   // YYYY-MM-DD
   recognitionEnd: string     // YYYY-MM-DD
   amountBeforeVat: number
@@ -99,6 +100,7 @@ export async function createProformaAction(
       recognition_period_end: input.recognitionEnd,
       recipient_email: input.recipientEmail,
       recipient_name: input.recipientName,
+      cc_emails: input.ccEmails ?? [],
       notes: input.notes || null,
       terms: `Payment due within ${input.paymentTermsDays} days of invoice date.`,
       created_by: session.user.id,
@@ -183,9 +185,12 @@ export async function sendProformaAction(
 
   // Send via Resend
   const resend = new Resend(process.env.RESEND_API_KEY)
+  const ccEmails: string[] = Array.isArray(doc.cc_emails) ? doc.cc_emails : []
+
   const { error: emailErr } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL ?? 'notifications@revflowapp.com',
     to: doc.recipient_email,
+    ...(ccEmails.length > 0 ? { cc: ccEmails } : {}),
     subject: `Proforma Invoice ${doc.document_number} — ${campaign.title}`,
     html,
   })

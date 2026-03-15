@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getFinanceExecs } from '@/lib/data/campaigns'
+import { getClientOptions } from '@/lib/data/clients'
 import NewCampaignForm from './new-campaign-form'
 import type { UserRole } from '@/types'
 
@@ -10,10 +11,12 @@ export default async function NewCampaignPage() {
   const session = await auth()
   const role = session!.user.role as UserRole
 
-  // Only admin and planner can create campaigns
   if (role !== 'admin' && role !== 'planner') redirect('/campaigns')
 
-  const financeExecs = await getFinanceExecs(session!.user.orgId)
+  const [financeExecs, clients] = await Promise.all([
+    getFinanceExecs(session!.user.orgId),
+    getClientOptions(session!.user.orgId),
+  ])
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-2xl mx-auto">
@@ -24,7 +27,7 @@ export default async function NewCampaignPage() {
         </p>
       </div>
 
-      <NewCampaignForm financeExecs={financeExecs} />
+      <NewCampaignForm financeExecs={financeExecs} clients={clients} />
     </div>
   )
 }

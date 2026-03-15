@@ -4,6 +4,7 @@ import { useState, useTransition, useMemo } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Send, Save, CheckCircle } from 'lucide-react'
 import { createProformaAction, sendProformaAction } from '@/lib/actions/proforma'
+import { EmailChips } from '@/components/clients/client-form'
 
 const VAT_RATE = 0.075
 
@@ -249,9 +250,15 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
 export default function ProformaForm({
   campaignId,
   campaign,
+  clientEmail,
+  clientCcEmails,
+  clientName,
 }: {
   campaignId: string
   campaign: Campaign
+  clientEmail?: string | null
+  clientCcEmails?: string[]
+  clientName?: string | null
 }) {
   const isAgency = campaign.campaign_type === 'agency'
 
@@ -263,9 +270,10 @@ export default function ProformaForm({
 
   // Form fields
   const [recipientName, setRecipientName] = useState(
-    campaign.agency_name && isAgency ? campaign.agency_name : campaign.advertiser,
+    clientName ?? (campaign.agency_name && isAgency ? campaign.agency_name : campaign.advertiser),
   )
-  const [recipientEmail, setRecipientEmail] = useState('')
+  const [recipientEmail, setRecipientEmail] = useState(clientEmail ?? '')
+  const [ccEmails, setCcEmails] = useState<string[]>(clientCcEmails ?? [])
   const [recognitionStart, setRecognitionStart] = useState(campaign.start_date ?? '')
   const [recognitionEnd, setRecognitionEnd] = useState(campaign.end_date ?? '')
   const [amountStr, setAmountStr] = useState(
@@ -308,6 +316,7 @@ export default function ProformaForm({
         campaignId,
         recipientName,
         recipientEmail,
+        ccEmails,
         recognitionStart,
         recognitionEnd,
         amountBeforeVat,
@@ -337,6 +346,7 @@ export default function ProformaForm({
           campaignId,
           recipientName,
           recipientEmail,
+          ccEmails,
           recognitionStart,
           recognitionEnd,
           amountBeforeVat,
@@ -418,6 +428,14 @@ export default function ProformaForm({
               />
               <p className="text-xs text-gray-400 mt-1">
                 The proforma will be sent to this address.
+              </p>
+            </div>
+
+            <div>
+              <Label>CC Emails <span className="text-gray-400 font-normal text-xs">(optional)</span></Label>
+              <EmailChips value={ccEmails} onChange={setCcEmails} placeholder="Add CC email…" />
+              <p className="text-xs text-gray-400 mt-1">
+                Press Enter or comma to add. Pre-filled from client record.
               </p>
             </div>
           </div>

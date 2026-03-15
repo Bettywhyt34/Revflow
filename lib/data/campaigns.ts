@@ -5,7 +5,7 @@ export async function getCampaigns(orgId: string): Promise<CampaignWithRelations
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('campaigns')
-    .select('*, account_manager:account_manager_id(id, full_name)')
+    .select('*, account_manager:account_manager_id(id, full_name), client:client_id(id, client_name, email, cc_emails)')
     .eq('org_id', orgId)
     .order('created_at', { ascending: false })
 
@@ -24,7 +24,7 @@ export async function getCampaignById(
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('campaigns')
-    .select('*, account_manager:account_manager_id(id, full_name)')
+    .select('*, account_manager:account_manager_id(id, full_name), client:client_id(id, client_name, email, cc_emails)')
     .eq('id', id)
     .eq('org_id', orgId)
     .maybeSingle()

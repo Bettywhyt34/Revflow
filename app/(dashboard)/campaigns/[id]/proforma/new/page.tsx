@@ -24,6 +24,9 @@ export default async function NewProformaPage({
 
   if (campaign.status !== 'plan_submitted') redirect(`/campaigns/${id}`)
 
+  // Client data for pre-filling BILL TO and CC emails
+  const client = campaign.client ?? null
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <ProformaForm
@@ -40,6 +43,9 @@ export default async function NewProformaPage({
           start_date: campaign.start_date,
           end_date: campaign.end_date,
         }}
+        clientEmail={client?.email ?? null}
+        clientCcEmails={client?.cc_emails ?? []}
+        clientName={client?.client_name ?? null}
       />
     </div>
   )

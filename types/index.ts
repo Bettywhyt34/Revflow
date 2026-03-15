@@ -57,11 +57,30 @@ export interface Campaign {
   po_number: string | null
   po_received_date: string | null
   po_amount: number | null
+  client_id: string | null
   created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Client {
+  id: string
+  org_id: string
+  client_name: string
+  contact_person: string | null
+  email: string | null
+  cc_emails: string[]
+  phone: string | null
+  address: string | null
+  payment_terms: string
+  default_currency: string
+  notes: string | null
+  created_by: string | null
   created_at: string
   updated_at: string
 }
 
 export interface CampaignWithRelations extends Campaign {
   account_manager: { id: string; full_name: string } | null
+  client: { id: string; client_name: string; email: string | null; cc_emails: string[] } | null
 }

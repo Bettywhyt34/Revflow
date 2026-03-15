@@ -7,6 +7,7 @@ import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard,
   Briefcase,
+  Building2,
   BarChart3,
   Settings,
   LogOut,
@@ -18,10 +19,11 @@ import type { UserRole } from '@/types'
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard',    icon: LayoutDashboard, active: true,  adminOnly: false },
-  { label: 'Campaigns', href: '/campaigns',    icon: Briefcase,       active: true,  adminOnly: false },
-  { label: 'Reports',   href: '/reports',      icon: BarChart3,       active: false, adminOnly: false },
-  { label: 'Users',     href: '/admin/users',  icon: Settings,        active: true,  adminOnly: true  },
+  { label: 'Dashboard', href: '/dashboard',   icon: LayoutDashboard, active: true,  adminOnly: false },
+  { label: 'Campaigns', href: '/campaigns',   icon: Briefcase,       active: true,  adminOnly: false },
+  { label: 'Clients',   href: '/clients',     icon: Building2,       active: true,  adminOnly: false },
+  { label: 'Reports',   href: '/reports',     icon: BarChart3,       active: false, adminOnly: false },
+  { label: 'Users',     href: '/admin/users', icon: Settings,        active: true,  adminOnly: true  },
 ]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -202,6 +204,12 @@ function TopBar({
       ? 'Campaign'
       : pathname.startsWith('/campaigns')
       ? 'Campaigns'
+      : pathname.startsWith('/clients/new')
+      ? 'New Client'
+      : pathname.startsWith('/clients/')
+      ? 'Client'
+      : pathname.startsWith('/clients')
+      ? 'Clients'
       : 'Revflow'
 
   async function handleSignOut() {
