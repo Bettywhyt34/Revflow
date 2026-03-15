@@ -14,7 +14,7 @@ function primaryAction(
 ): { label: string; href: string } | null {
   if (role === 'admin' || role === 'planner') {
     if (status === 'plan_submitted')
-      return { label: 'Create Proforma', href: `/campaigns/${campaignId}/proforma/new` }
+      return { label: 'Upload Plan/MPO', href: `/campaigns/${campaignId}/upload` }
   }
   if (role === 'admin' || role === 'finance_exec') {
     if (status === 'po_received')

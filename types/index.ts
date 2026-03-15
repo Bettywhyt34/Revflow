@@ -33,6 +33,9 @@ export type CampaignStatus =
 
 export type CampaignType = 'direct' | 'agency' | 'programmatic'
 
+export type DetectionConfidence = 'high' | 'medium' | 'low' | 'not_found'
+export type ExtractionMethod = 'excel_direct' | 'pdf_text' | 'pdf_ocr' | 'manual'
+
 export interface Campaign {
   id: string
   org_id: string
