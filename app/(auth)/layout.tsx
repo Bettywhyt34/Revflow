@@ -44,9 +44,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </div>
 
       {/* ── Right: form panel ── */}
-      <div className="flex-1 flex flex-col items-center justify-center bg-white px-6 py-12 min-h-screen">
+      <div className="flex-1 flex flex-col items-center justify-center bg-white px-4 py-8 sm:px-6 sm:py-12 min-h-screen overflow-x-hidden">
         {/* Mobile wordmark (shown only when brand panel is hidden) */}
-        <div className="flex lg:hidden items-center gap-2 mb-8">
+        <div className="flex lg:hidden items-center gap-2 mb-6 sm:mb-8">
           <div
             className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
             style={{ background: '#0D9488' }}
