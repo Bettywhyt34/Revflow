@@ -16,6 +16,10 @@ function primaryAction(
     if (status === 'plan_submitted')
       return { label: 'Create Proforma', href: `/campaigns/${campaignId}/proforma/new` }
   }
+  if (role === 'admin' || role === 'planner' || role === 'finance_exec') {
+    if (status === 'proforma_sent')
+      return { label: 'Log PO Received', href: `/campaigns/${campaignId}/po/log` }
+  }
   if (role === 'admin' || role === 'finance_exec') {
     if (status === 'po_received')
       return { label: 'Raise Invoice', href: `/campaigns/${campaignId}/invoice/new` }

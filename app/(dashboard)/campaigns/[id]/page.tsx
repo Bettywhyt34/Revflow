@@ -9,7 +9,7 @@ import {
 import { getDocumentsByCampaign } from '@/lib/data/documents'
 import StatusBadge from '@/components/campaigns/status-badge'
 import NextActionBadge from '@/components/campaigns/next-action-badge'
-import { ArrowLeft, Calendar, User, FileText, Bell } from 'lucide-react'
+import { ArrowLeft, Calendar, User, FileText, Bell, ClipboardCheck, AlertTriangle } from 'lucide-react'
 import type { CampaignStatus, UserRole } from '@/types'
 import CampaignActions from './campaign-actions'
 
@@ -144,7 +144,29 @@ export default async function CampaignDetailPage({
                 <Calendar className="h-3.5 w-3.5" />
                 Created {formatDate(campaign.created_at)}
               </span>
+              {campaign.po_number && (
+                <span className="flex items-center gap-1.5">
+                  <ClipboardCheck className="h-3.5 w-3.5" />
+                  PO: {campaign.po_number}
+                  {campaign.po_received_date && (
+                    <span className="text-gray-300">· {formatDate(campaign.po_received_date)}</span>
+                  )}
+                </span>
+              )}
             </div>
+
+            {/* PO value mismatch warning */}
+            {campaign.po_amount != null &&
+              campaign.planned_contract_value != null &&
+              campaign.planned_contract_value > 0 &&
+              Math.abs(campaign.po_amount - campaign.planned_contract_value) /
+                campaign.planned_contract_value > 0.05 && (
+                <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 w-fit">
+                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                  PO amount ({formatCurrency(campaign.po_amount, campaign.currency)}) differs
+                  from planned value ({formatCurrency(campaign.planned_contract_value, campaign.currency)})
+                </div>
+              )}
           </div>
 
           {/* Action buttons */}

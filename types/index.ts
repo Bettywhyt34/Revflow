@@ -54,6 +54,9 @@ export interface Campaign {
   account_manager_id: string | null
   plan_reference: string | null
   notes: string | null
+  po_number: string | null
+  po_received_date: string | null
+  po_amount: number | null
   created_by: string
   created_at: string
   updated_at: string
