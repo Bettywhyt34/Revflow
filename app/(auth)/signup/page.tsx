@@ -3,13 +3,11 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 
 type Path = 'create_org' | 'join_org'
+
+const inputClass =
+  'w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/20'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -28,6 +26,11 @@ export default function SignupPage() {
 
   // join_org
   const [inviteCode, setInviteCode] = useState('')
+
+  function switchPath(p: Path) {
+    setPath(p)
+    setError(null)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -48,172 +51,184 @@ export default function SignupPage() {
       return
     }
 
-    // Success — redirect to login with a flag so login page can show a message
     router.push('/login?registered=1')
   }
 
   return (
-    <Card className="w-full max-w-md shadow-sm">
-      <CardHeader className="text-center pb-4">
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">R</span>
-          </div>
-          <span className="text-2xl font-bold tracking-tight text-foreground">Revflow</span>
-        </div>
-        <CardTitle className="text-lg font-semibold">Create your account</CardTitle>
-        <CardDescription className="text-sm text-muted-foreground">
-          AR &amp; Campaign Billing Platform
-        </CardDescription>
-      </CardHeader>
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Create your account</h2>
+        <p className="mt-1 text-sm text-gray-500">Get started with Revflow</p>
+      </div>
 
-      <CardContent className="flex flex-col gap-4">
-        {/* Path toggle */}
-        <div className="flex rounded-lg border overflow-hidden text-sm font-medium">
-          <button
-            type="button"
-            onClick={() => { setPath('create_org'); setError(null) }}
-            className={`flex-1 py-2 transition-colors ${
-              path === 'create_org'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-background text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            New organisation
-          </button>
-          <button
-            type="button"
-            onClick={() => { setPath('join_org'); setError(null) }}
-            className={`flex-1 py-2 transition-colors ${
-              path === 'join_org'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-background text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            Join with invite
-          </button>
-        </div>
+      {/* Path toggle */}
+      <div className="flex rounded-lg border border-gray-200 p-1 gap-1 bg-gray-50 text-sm font-medium">
+        <button
+          type="button"
+          onClick={() => switchPath('create_org')}
+          className="flex-1 rounded-md py-2 transition-all"
+          style={
+            path === 'create_org'
+              ? { background: '#0D9488', color: '#ffffff', boxShadow: '0 1px 3px rgba(13,148,136,0.3)' }
+              : { color: '#6b7280' }
+          }
+        >
+          New organisation
+        </button>
+        <button
+          type="button"
+          onClick={() => switchPath('join_org')}
+          className="flex-1 rounded-md py-2 transition-all"
+          style={
+            path === 'join_org'
+              ? { background: '#0D9488', color: '#ffffff', boxShadow: '0 1px 3px rgba(13,148,136,0.3)' }
+              : { color: '#6b7280' }
+          }
+        >
+          Join with invite
+        </button>
+      </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          {/* create_org only */}
-          {path === 'create_org' && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="companyName">Company Name</Label>
-              <Input
-                id="companyName"
-                type="text"
-                placeholder="QVT Media"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                required
-                autoComplete="organization"
-              />
-            </div>
-          )}
-
-          {/* join_org only */}
-          {path === 'join_org' && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="inviteCode">Invite Code</Label>
-              <Input
-                id="inviteCode"
-                type="text"
-                placeholder="ABC123"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                required
-                autoComplete="off"
-                className="uppercase tracking-widest"
-              />
-            </div>
-          )}
-
-          {/* Shared fields */}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {/* create_org only */}
+        {path === 'create_org' && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="fullName">Your Name</Label>
-            <Input
-              id="fullName"
+            <label htmlFor="companyName" className="text-sm font-medium text-gray-700">
+              Company Name
+            </label>
+            <input
+              id="companyName"
               type="text"
-              placeholder="Jane Doe"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              placeholder="QVT Media"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
               required
-              autoComplete="name"
+              autoComplete="organization"
+              className={inputClass}
             />
           </div>
+        )}
 
+        {/* join_org only */}
+        {path === 'join_org' && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+            <label htmlFor="inviteCode" className="text-sm font-medium text-gray-700">
+              Invite Code
+            </label>
+            <input
+              id="inviteCode"
+              type="text"
+              placeholder="ABC123"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
               required
-              autoComplete="email"
+              autoComplete="off"
+              className={inputClass + ' uppercase tracking-widest font-mono'}
             />
           </div>
+        )}
 
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="fullName" className="text-sm font-medium text-gray-700">
+            Your Name
+          </label>
+          <input
+            id="fullName"
+            type="text"
+            placeholder="Jane Doe"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+            autoComplete="name"
+            className={inputClass}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="email" className="text-sm font-medium text-gray-700">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+            className={inputClass}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="password" className="text-sm font-medium text-gray-700">
+            Password
+          </label>
+          <input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="new-password"
+            className={inputClass}
+          />
+        </div>
+
+        {/* create_org only */}
+        {path === 'create_org' && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
+            <label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
+              Confirm Password
+            </label>
+            <input
+              id="confirmPassword"
               type="password"
               placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               required
               autoComplete="new-password"
+              className={inputClass}
             />
           </div>
+        )}
 
-          {/* create_org only */}
-          {path === 'create_org' && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
-            </div>
-          )}
+        {path === 'join_org' && (
+          <p className="text-xs text-gray-400">
+            Your account will be <span className="font-medium text-gray-500">pending</span> until an admin assigns you a role.
+          </p>
+        )}
 
-          {error && (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          )}
+        {error && (
+          <p className="text-sm text-red-600" role="alert">
+            {error}
+          </p>
+        )}
 
-          {path === 'join_org' && (
-            <p className="text-xs text-muted-foreground">
-              Your account will be pending until an admin assigns you a role.
-            </p>
-          )}
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-1 w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-60"
+          style={{ background: loading ? '#0b857a' : '#0D9488' }}
+          onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = '#0b857a' }}
+          onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = '#0D9488' }}
+        >
+          {loading
+            ? 'Creating account…'
+            : path === 'create_org'
+            ? 'Create organisation'
+            : 'Join organisation'}
+        </button>
+      </form>
 
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading
-              ? 'Creating account…'
-              : path === 'create_org'
-              ? 'Create organisation'
-              : 'Join organisation'}
-          </Button>
-        </form>
-
-        <Separator />
-
-        <p className="text-center text-xs text-muted-foreground">
-          Already have an account?{' '}
-          <Link href="/login" className="underline underline-offset-2 hover:text-foreground">
-            Sign in
-          </Link>
-        </p>
-      </CardContent>
-    </Card>
+      <p className="text-center text-sm text-gray-500">
+        Already have an account?{' '}
+        <Link href="/login" className="font-medium text-[#0D9488] hover:underline underline-offset-2">
+          Sign in
+        </Link>
+      </p>
+    </div>
   )
 }
