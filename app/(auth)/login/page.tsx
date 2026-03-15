@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +12,8 @@ import { Separator } from '@/components/ui/separator'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const registered = searchParams.get('registered') === '1'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +56,11 @@ export default function LoginPage() {
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
+        {registered && (
+          <p className="text-sm text-center text-green-600 font-medium" role="status">
+            Account created — sign in below.
+          </p>
+        )}
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="email">Email</Label>
@@ -99,6 +107,13 @@ export default function LoginPage() {
           </p>
           <p className="text-xs text-muted-foreground">Zoho — Coming soon</p>
         </div>
+
+        <p className="text-center text-xs text-muted-foreground">
+          Don&apos;t have an account?{' '}
+          <Link href="/signup" className="underline underline-offset-2 hover:text-foreground">
+            Sign up
+          </Link>
+        </p>
 
         <p className="text-center text-xs text-muted-foreground">
           By signing in, you agree to QVT Media&apos;s internal platform policies.
