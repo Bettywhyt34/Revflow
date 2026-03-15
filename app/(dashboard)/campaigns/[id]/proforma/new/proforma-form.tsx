@@ -7,6 +7,7 @@ import { toWords } from 'number-to-words'
 import { createProformaAction, sendProformaAction, getProformaPreviewAction } from '@/lib/actions/proforma'
 import { EmailChips } from '@/components/clients/client-form'
 import SendDialog from '@/components/documents/send-dialog'
+import { useOrgSettings } from '@/components/layout/org-settings-context'
 
 const VAT_RATE = 0.075
 
@@ -270,9 +271,6 @@ export default function ProformaForm({
   clientName,
   clientAddress,
   clientCode,
-  orgLogoUrl,
-  primaryColor,
-  orgName,
 }: {
   campaignId: string
   campaign: Campaign
@@ -281,10 +279,8 @@ export default function ProformaForm({
   clientName?: string | null
   clientAddress?: string | null
   clientCode?: string | null
-  orgLogoUrl: string | null
-  primaryColor: string
-  orgName: string
 }) {
+  const { primaryColor, logoUrl: orgLogoUrl, orgName } = useOrgSettings()
   const [isPending, startTransition] = useTransition()
   const [savedDocId, setSavedDocId] = useState<string | null>(null)
   const [savedDocNumber, setSavedDocNumber] = useState<string | null>(null)

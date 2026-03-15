@@ -23,7 +23,12 @@ export default async function DashboardLayout({
         email: session.user.email,
         role: session.user.role as UserRole,
       }}
-      primaryColor={orgSettings.primary_color}
+      orgSettings={{
+        primaryColor: orgSettings.primary_color,
+        secondaryColor: orgSettings.secondary_color,
+        logoUrl: orgSettings.logo_url,
+        orgName: orgSettings.org_name ?? 'Revflow',
+      }}
     >
       {children}
     </AppShell>

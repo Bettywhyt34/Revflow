@@ -1,7 +1,6 @@
 import { auth } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import { getCampaignById } from '@/lib/data/campaigns'
-import { getOrgSettingsWithDefaults } from '@/lib/data/settings'
 import type { UserRole } from '@/types'
 import ProformaForm from './proforma-form'
 
@@ -20,10 +19,7 @@ export default async function NewProformaPage({
 
   if (role !== 'admin' && role !== 'planner') redirect(`/campaigns/${id}`)
 
-  const [campaign, orgSettings] = await Promise.all([
-    getCampaignById(id, session!.user.orgId),
-    getOrgSettingsWithDefaults(session!.user.orgId),
-  ])
+  const campaign = await getCampaignById(id, session!.user.orgId)
   if (!campaign) notFound()
 
   if (campaign.status !== 'plan_submitted') redirect(`/campaigns/${id}`)
@@ -52,9 +48,6 @@ export default async function NewProformaPage({
         clientName={client?.client_name ?? null}
         clientAddress={client?.address ?? null}
         clientCode={client?.client_code ?? null}
-        orgLogoUrl={orgSettings.logo_url}
-        primaryColor={orgSettings.primary_color ?? '#0D9488'}
-        orgName={orgSettings.org_name ?? 'QVT MEDIA'}
       />
     </div>
   )

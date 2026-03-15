@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Mail, CheckCircle, Download } from 'lucide-react'
 import { getDocumentById } from '@/lib/data/documents'
-import { getOrgBankAccounts } from '@/lib/data/settings'
+import { getOrgBankAccounts, getOrgSettingsWithDefaults } from '@/lib/data/settings'
 import { createAdminClient } from '@/lib/supabase'
 import type { UserRole, OrgBankAccount } from '@/types'
 import SendProformaButton from './send-button'
@@ -67,8 +67,9 @@ export default async function ViewProformaPage({
   const showAgencyFee = (doc.agency_fee_amount ?? 0) > 0
 
   // Fetch bank accounts and resolve display account
-  const [bankAccounts, clientRow] = await Promise.all([
+  const [bankAccounts, orgSettings, clientRow] = await Promise.all([
     getOrgBankAccounts(orgId),
+    getOrgSettingsWithDefaults(orgId),
     campaign.client_id
       ? createAdminClient()
           .from('clients')
@@ -118,26 +119,48 @@ export default async function ViewProformaPage({
       {/* Proforma document */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {/* Header */}
-        <div
-          className="px-8 py-7"
-          style={{ background: 'linear-gradient(135deg,#0D9488 0%,#065F59 100%)' }}
-        >
-          <div className="flex flex-col sm:flex-row sm:justify-between gap-4">
-            <div>
-              <div className="text-2xl font-extrabold text-white tracking-tight">QVT MEDIA</div>
-              <div className="text-xs text-teal-200 mt-0.5">Campaign Billing. Done Right.</div>
-              <div className="text-xs text-teal-200 mt-1.5">Lagos, Nigeria · billing@revflowapp.com</div>
-            </div>
-            <div className="sm:text-right">
-              <div className="text-lg font-bold text-white">PROFORMA INVOICE</div>
-              <div className="text-sm text-teal-100 mt-1 font-semibold">{doc.document_number}</div>
-              <div className="text-xs text-teal-200 mt-1">
-                Date: {fmtDate(doc.issue_date)}<br />
-                Valid Until: {fmtDate(doc.due_date)}
+        <div className="px-8 py-6 flex flex-col sm:flex-row sm:justify-between gap-4 items-start">
+          <div>
+            {orgSettings.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={orgSettings.logo_url}
+                alt={orgSettings.org_name ?? 'Logo'}
+                className="h-12 max-w-[160px] object-contain mb-1"
+              />
+            ) : (
+              <div
+                className="text-2xl font-extrabold tracking-tight"
+                style={{ color: orgSettings.primary_color }}
+              >
+                {orgSettings.org_name ?? 'QVT MEDIA'}
               </div>
+            )}
+          </div>
+          <div className="sm:text-right">
+            <div
+              className="text-lg font-bold"
+              style={{ color: '#1a1a4e' }}
+            >
+              PROFORMA INVOICE
+            </div>
+            <div
+              className="text-sm mt-1 font-semibold"
+              style={{ color: orgSettings.primary_color }}
+            >
+              {doc.document_number}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              Date: {fmtDate(doc.issue_date)}<br />
+              Valid Until: {fmtDate(doc.due_date)}
             </div>
           </div>
         </div>
+        {/* Brand divider */}
+        <div
+          className="mx-8 mb-0"
+          style={{ height: 2, backgroundColor: orgSettings.primary_color }}
+        />
 
         {/* Body */}
         <div className="px-8 py-7 space-y-6">
@@ -154,7 +177,7 @@ export default async function ViewProformaPage({
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
                 Recognition Period
               </div>
-              <div className="text-sm font-semibold" style={{ color: '#0D9488' }}>
+              <div className="text-sm font-semibold" style={{ color: orgSettings.primary_color }}>
                 {doc.recognition_period_start && doc.recognition_period_end
                   ? `${fmtDate(doc.recognition_period_start)} – ${fmtDate(doc.recognition_period_end)}`
                   : '— not set —'}
@@ -213,7 +236,7 @@ export default async function ViewProformaPage({
                   <td className="py-2 text-gray-500">VAT @ 7.5%</td>
                   <td className="py-2 text-right text-gray-700">{fmt(doc.vat_amount, doc.currency)}</td>
                 </tr>
-                <tr className="border-t-2" style={{ borderColor: '#0D9488' }}>
+                <tr className="border-t-2" style={{ borderColor: orgSettings.primary_color }}>
                   <td className="pt-3 font-bold text-gray-900 text-base">Total Due</td>
                   <td className="pt-3 text-right font-bold text-gray-900 text-base">
                     {fmt(doc.total_amount, doc.currency)}
@@ -225,14 +248,28 @@ export default async function ViewProformaPage({
 
           {/* Payment callout */}
           {doc.due_date && (
-            <div className="bg-teal-50 border border-teal-200 rounded-lg px-5 py-3">
-              <span className="text-sm font-semibold text-teal-800">Payment due by {fmtDate(doc.due_date)}</span>
-              <span className="text-sm text-teal-600 ml-1">(30 days from invoice date)</span>
+            <div
+              className="rounded-lg px-5 py-3"
+              style={{
+                backgroundColor: orgSettings.primary_color + '18',
+                border: `1px solid ${orgSettings.primary_color}40`,
+              }}
+            >
+              <span
+                className="text-sm font-semibold"
+                style={{ color: orgSettings.primary_color }}
+              >
+                Payment due by {fmtDate(doc.due_date)}
+              </span>
+              <span className="text-sm text-gray-500 ml-1">(30 days from invoice date)</span>
             </div>
           )}
 
           {doc.notes && (
-            <div className="bg-gray-50 border-l-4 border-teal-400 px-4 py-3 text-sm text-gray-600 rounded-r-lg">
+            <div
+              className="bg-gray-50 px-4 py-3 text-sm text-gray-600 rounded-r-lg border-l-4"
+              style={{ borderColor: orgSettings.primary_color }}
+            >
               <span className="font-semibold">Notes:</span> {doc.notes}
             </div>
           )}

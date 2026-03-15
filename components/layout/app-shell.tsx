@@ -17,6 +17,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import type { UserRole } from '@/types'
+import { OrgSettingsProvider, useOrgSettings, type OrgBrandState } from './org-settings-context'
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -50,24 +51,48 @@ function initials(name: string | null | undefined): string {
     .toUpperCase()
 }
 
-// ── Sidebar content ──────────────────────────────────────────────────────────
-// Bottom tabs (mobile) — only active, non-admin-only items
 function getBottomTabs(role: UserRole | null) {
   return NAV_ITEMS.filter((n) => n.active && (!n.adminOnly || role === 'admin'))
 }
 
+// ── Logo mark — shows org logo or branded "R" fallback ──────────────────────
+function LogoMark({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const { primaryColor, logoUrl, orgName } = useOrgSettings()
+  const dim = size === 'sm' ? 'h-6 w-6 rounded-md text-xs' : 'h-8 w-8 rounded-lg text-sm'
+
+  if (logoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={logoUrl}
+        alt={orgName}
+        className={`${size === 'sm' ? 'h-6' : 'h-8'} w-auto max-w-[80px] object-contain flex-shrink-0`}
+      />
+    )
+  }
+
+  return (
+    <div
+      className={`${dim} flex items-center justify-center text-white font-bold flex-shrink-0`}
+      style={{ background: primaryColor }}
+    >
+      {orgName.charAt(0).toUpperCase()}
+    </div>
+  )
+}
+
+// ── Sidebar content ───────────────────────────────────────────────────────────
 function SidebarContent({
   user,
   pathname,
-  primaryColor,
   onClose,
 }: {
   user: { name?: string | null; email?: string | null; role: UserRole | null }
   pathname: string
-  primaryColor: string
   onClose?: () => void
 }) {
   const router = useRouter()
+  const { primaryColor, orgName } = useOrgSettings()
 
   async function handleSignOut() {
     await signOut({ redirect: false })
@@ -78,19 +103,16 @@ function SidebarContent({
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="flex items-center justify-between px-5 py-5 border-b border-gray-100">
-        <div className="flex items-center gap-2.5">
-          <div
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-            style={{ background: primaryColor }}
-          >
-            R
-          </div>
-          <span className="text-lg font-bold tracking-tight text-gray-900">Revflow</span>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <LogoMark size="md" />
+          <span className="text-lg font-bold tracking-tight text-gray-900 truncate">
+            {orgName || 'Revflow'}
+          </span>
         </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="lg:hidden p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="lg:hidden p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0"
           >
             <X className="h-5 w-5" />
           </button>
@@ -168,12 +190,11 @@ function SidebarContent({
 function MobileBottomNav({
   pathname,
   role,
-  primaryColor,
 }: {
   pathname: string
   role: UserRole | null
-  primaryColor: string
 }) {
+  const { primaryColor } = useOrgSettings()
   const tabs = getBottomTabs(role)
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 flex safe-bottom">
@@ -199,15 +220,14 @@ function MobileBottomNav({
 // ── Top bar ───────────────────────────────────────────────────────────────────
 function TopBar({
   user,
-  primaryColor,
   onMenuOpen,
 }: {
   user: { name?: string | null; role: UserRole | null }
-  primaryColor: string
   onMenuOpen: () => void
 }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { primaryColor } = useOrgSettings()
 
   const pageTitle =
     pathname === '/dashboard'
@@ -242,12 +262,7 @@ function TopBar({
         <Menu className="h-5 w-5" />
       </button>
       <div className="flex items-center gap-2 flex-1 min-w-0">
-        <div
-          className="h-6 w-6 rounded-md flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
-          style={{ background: primaryColor }}
-        >
-          R
-        </div>
+        <LogoMark size="sm" />
         <span className="text-sm font-semibold text-gray-900 truncate">{pageTitle}</span>
       </div>
       <button
@@ -256,6 +271,8 @@ function TopBar({
       >
         <LogOut className="h-4 w-4" />
       </button>
+      {/* suppress unused warning */}
+      <span style={{ color: primaryColor }} className="hidden" />
     </header>
   )
 }
@@ -264,50 +281,51 @@ function TopBar({
 export default function AppShell({
   user,
   children,
-  primaryColor = '#0D9488',
+  orgSettings,
 }: {
   user: { name?: string | null; email?: string | null; role: UserRole | null }
   children: React.ReactNode
-  primaryColor?: string
+  orgSettings: OrgBrandState
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
 
   return (
-    <div className="flex min-h-screen bg-gray-50 overflow-x-hidden">
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:flex-shrink-0 bg-white border-r border-gray-100 sticky top-0 h-screen">
-        <SidebarContent user={user} pathname={pathname} primaryColor={primaryColor} />
-      </aside>
+    <OrgSettingsProvider initial={orgSettings}>
+      <div className="flex min-h-screen bg-gray-50 overflow-x-hidden">
+        {/* Desktop sidebar */}
+        <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:flex-shrink-0 bg-white border-r border-gray-100 sticky top-0 h-screen">
+          <SidebarContent user={user} pathname={pathname} />
+        </aside>
 
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-40 flex">
-          <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)}
-          />
-          <aside className="relative z-50 w-72 max-w-[85vw] bg-white h-full shadow-xl">
-            <SidebarContent
-              user={user}
-              pathname={pathname}
-              primaryColor={primaryColor}
-              onClose={() => setSidebarOpen(false)}
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div className="lg:hidden fixed inset-0 z-40 flex">
+            <div
+              className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+              onClick={() => setSidebarOpen(false)}
             />
-          </aside>
+            <aside className="relative z-50 w-72 max-w-[85vw] bg-white h-full shadow-xl">
+              <SidebarContent
+                user={user}
+                pathname={pathname}
+                onClose={() => setSidebarOpen(false)}
+              />
+            </aside>
+          </div>
+        )}
+
+        {/* Main content column */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <TopBar user={user} onMenuOpen={() => setSidebarOpen(true)} />
+          <main className="flex-1 overflow-x-hidden pb-20 lg:pb-0">
+            {children}
+          </main>
         </div>
-      )}
 
-      {/* Main content column */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopBar user={user} primaryColor={primaryColor} onMenuOpen={() => setSidebarOpen(true)} />
-        <main className="flex-1 overflow-x-hidden pb-20 lg:pb-0">
-          {children}
-        </main>
+        {/* Mobile bottom nav */}
+        <MobileBottomNav pathname={pathname} role={user.role} />
       </div>
-
-      {/* Mobile bottom nav */}
-      <MobileBottomNav pathname={pathname} role={user.role} primaryColor={primaryColor} />
-    </div>
+    </OrgSettingsProvider>
   )
 }

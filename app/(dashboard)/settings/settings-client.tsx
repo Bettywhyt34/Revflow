@@ -13,6 +13,7 @@ import {
   type BankAccountInput,
 } from '@/lib/actions/settings'
 import type { OrgSettings, OrgBankAccount, UserRole } from '@/types'
+import { useOrgSettings } from '@/components/layout/org-settings-context'
 
 // ── Color Picker ──────────────────────────────────────────────────────────────
 function ColorPicker({
@@ -93,7 +94,10 @@ function useSaveBanner() {
   const [errorMsg, setErrorMsg] = useState('')
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const run = useCallback(async (fn: () => Promise<{ error?: string; ok?: true }>) => {
+  const run = useCallback(async (
+    fn: () => Promise<{ error?: string; ok?: true }>,
+    onSuccess?: () => void,
+  ) => {
     setState('saving')
     const result = await fn()
     if (result.error) {
@@ -101,6 +105,7 @@ function useSaveBanner() {
       setState('error')
     } else {
       setState('ok')
+      onSuccess?.()
     }
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => setState('idle'), 3000)
@@ -416,6 +421,7 @@ function OrgProfileTab({
   const [logoUrl, setLogoUrl] = useState(s.logo_url ?? '')
   const [uploading, setUploading] = useState(false)
   const { run, banner, saving } = useSaveBanner()
+  const { setOrgSettings } = useOrgSettings()
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -425,7 +431,11 @@ function OrgProfileTab({
     fd.append('file', file)
     const res = await fetch('/api/settings/logo-upload', { method: 'POST', body: fd })
     const json = await res.json()
-    if (json.logoUrl) setLogoUrl(json.logoUrl)
+    if (json.logoUrl) {
+      setLogoUrl(json.logoUrl)
+      // Update sidebar immediately on upload — no save needed
+      setOrgSettings({ logoUrl: json.logoUrl })
+    }
     setUploading(false)
   }
 
@@ -497,16 +507,24 @@ function OrgProfileTab({
           <button
             disabled={saving}
             onClick={() =>
-              run(() =>
-                saveOrgProfileAction({
-                  org_name: orgName,
-                  primary_color: primary,
-                  secondary_color: secondary,
-                  default_currency: currency,
-                  tax_id: taxId,
-                  rc_number: rcNumber,
-                  address,
-                }),
+              run(
+                () =>
+                  saveOrgProfileAction({
+                    org_name: orgName,
+                    primary_color: primary,
+                    secondary_color: secondary,
+                    default_currency: currency,
+                    tax_id: taxId,
+                    rc_number: rcNumber,
+                    address,
+                  }),
+                () =>
+                  setOrgSettings({
+                    primaryColor: primary,
+                    secondaryColor: secondary,
+                    logoUrl: logoUrl || null,
+                    orgName: orgName || 'Revflow',
+                  }),
               )
             }
             className="min-h-[44px] px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-60"
@@ -677,6 +695,7 @@ function AppearanceTab({ s, role }: { s: OrgSettings; role: UserRole }) {
   const [primary, setPrimary] = useState(s.primary_color)
   const [secondary, setSecondary] = useState(s.secondary_color)
   const { run, banner, saving } = useSaveBanner()
+  const { setOrgSettings } = useOrgSettings()
 
   return (
     <AdminGate role={role}>
@@ -700,16 +719,18 @@ function AppearanceTab({ s, role }: { s: OrgSettings; role: UserRole }) {
           <button
             disabled={saving}
             onClick={() =>
-              run(() =>
-                saveOrgProfileAction({
-                  org_name: s.org_name ?? '',
-                  primary_color: primary,
-                  secondary_color: secondary,
-                  default_currency: s.default_currency,
-                  tax_id: s.tax_id ?? '',
-                  rc_number: s.rc_number ?? '',
-                  address: s.address ?? '',
-                }),
+              run(
+                () =>
+                  saveOrgProfileAction({
+                    org_name: s.org_name ?? '',
+                    primary_color: primary,
+                    secondary_color: secondary,
+                    default_currency: s.default_currency,
+                    tax_id: s.tax_id ?? '',
+                    rc_number: s.rc_number ?? '',
+                    address: s.address ?? '',
+                  }),
+                () => setOrgSettings({ primaryColor: primary, secondaryColor: secondary }),
               )
             }
             className="min-h-[44px] px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-60"
