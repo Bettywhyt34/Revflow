@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { ArrowLeft, Upload, X, FileText, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { logPoReceivedAction } from '@/lib/actions/po'
 
@@ -64,6 +65,7 @@ export default function PoForm({
   currency: string
   plannedValue: number | null
 }) {
+  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
@@ -144,10 +146,11 @@ export default function PoForm({
         notes,
       })
 
-      if (result?.error) {
+      if ('error' in result) {
         setError(result.error)
+        return
       }
-      // On success, server action redirects
+      router.push(`/campaigns/${campaignId}`)
     })
   }
 

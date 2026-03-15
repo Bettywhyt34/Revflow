@@ -33,7 +33,10 @@ function fmt(amount: number, currency: string): string {
 
 function fmtDate(iso: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+  const d = new Date(iso)
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  return `${day}/${month}/${d.getUTCFullYear()}`
 }
 
 function today(): string { return new Date().toISOString().split('T')[0] }
@@ -535,98 +538,123 @@ export default function InvoiceForm({
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Live Preview</h2>
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden text-xs font-sans select-none">
-            {/* Header */}
-            <div className="px-8 pt-6 pb-3 flex justify-between items-start gap-4">
+
+            {/* ── Header ── */}
+            <div className="px-8 pt-7 pb-3 flex justify-between items-start gap-4">
               <div>
                 {orgLogoUrl
                   // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={orgLogoUrl} alt={orgName} className="h-12 max-w-[140px] object-contain" />
-                  : <span className="text-xl font-extrabold" style={{ color: pc }}>{orgName}</span>
+                  ? <img src={orgLogoUrl} alt={orgName} className="h-14 max-w-[150px] object-contain" />
+                  : <span className="text-2xl font-extrabold leading-none" style={{ color: pc }}>{orgName}</span>
                 }
               </div>
-              <div className="text-right">
-                <div className="text-base font-bold" style={{ color: '#1a1a4e' }}>TAX INVOICE</div>
-                <div className="text-[11px] font-semibold mt-0.5" style={{ color: pc }}>
-                  {savedDocNumber ?? '— (assigned on save)'}
-                </div>
+              <div className="text-right pt-1">
+                <div className="text-xl font-extrabold leading-tight" style={{ color: '#1a1a4e' }}>TAX INVOICE</div>
               </div>
             </div>
-            <hr className="mx-8 mb-4" style={{ borderColor: pc, borderTopWidth: 2 }} />
+            <hr className="mx-8 mb-5" style={{ borderColor: pc, borderTopWidth: 3 }} />
 
-            {/* Meta */}
+            {/* ── Meta: stacked DATE / INVOICE# / CUSTOMER ID | TO ── */}
             <div className="px-8 pb-5 flex justify-between gap-6">
-              <div className="space-y-1.5">
+              <div className="flex gap-7">
                 {[
-                  ['DATE:', issueDate ? fmtDate(issueDate) : '—'],
-                  ['INVOICE #:', savedDocNumber ?? '— (assigned on save)'],
-                  ['CUSTOMER ID:', clientCustomerId ?? '—'],
+                  ['DATE', issueDate ? fmtDate(issueDate) : '—'],
+                  ['INVOICE #', savedDocNumber ?? '(on save)'],
+                  ['CUSTOMER ID', clientCustomerId ?? '—'],
                 ].map(([label, value]) => (
-                  <div key={label} className="flex gap-1.5">
-                    <span className="font-bold w-24 shrink-0 text-[11px]" style={{ color: pc }}>{label}</span>
-                    <span className="text-gray-800 text-[11px]">{value}</span>
+                  <div key={label}>
+                    <div className="font-bold text-[9px] uppercase mb-1" style={{ color: pc }}>{label}</div>
+                    <div className="font-bold text-gray-900 text-[11px]">{value}</div>
                   </div>
                 ))}
               </div>
               <div className="text-right">
-                <div className="font-bold text-[11px] mb-1" style={{ color: pc }}>TO:</div>
+                <div className="font-bold text-[9px] uppercase mb-1" style={{ color: pc }}>TO</div>
                 <div className="font-bold text-gray-900 text-[11px]">{recipientName || campaign.advertiser}</div>
-                {clientAddress && <div className="text-gray-500 text-[10px] mt-0.5 whitespace-pre-line">{clientAddress}</div>}
+                {clientAddress && (
+                  <div className="text-gray-500 text-[10px] mt-1 whitespace-pre-line max-w-[180px]">{clientAddress}</div>
+                )}
               </div>
             </div>
 
-            {/* Subject */}
-            <div className="px-8 pb-5">
-              <div className="font-bold text-[11px] mb-1.5" style={{ color: pc }}>SUBJECT:</div>
-              <div className="border rounded px-3 py-2 text-[11px] text-gray-700" style={{ borderColor: pc + '60' }}>
+            {/* ── Subject ── */}
+            <div className="px-8 pb-4">
+              <div className="font-bold text-[9px] uppercase mb-1.5" style={{ color: pc }}>SUBJECT:</div>
+              <div className="border px-3 py-2 text-[11px] text-gray-800" style={{ borderColor: pc }}>
                 {subject || '—'}
               </div>
             </div>
 
-            {/* Table */}
-            <div className="px-8 pb-5">
-              <table className="w-full border-collapse text-[10px]">
+            {/* ── Table ── */}
+            <div className="px-8 pb-3 overflow-x-auto">
+              <table className="w-full border-collapse text-[11px]">
                 <thead>
                   <tr style={{ backgroundColor: pc }}>
-                    {['QTY', 'DESCRIPTION', 'UNIT PRICE', 'LINE TOTAL'].map((h) => (
-                      <th key={h} className="py-2 px-2 text-white font-bold text-left">{h}</th>
-                    ))}
+                    <th className="py-2 px-2 text-white font-bold uppercase text-left w-[8%]">QTY</th>
+                    <th className="py-2 px-2 text-white font-bold uppercase text-left w-[47%]">DESCRIPTION</th>
+                    <th className="py-2 px-2 text-white font-bold uppercase text-right w-[23%]">UNIT PRICE</th>
+                    <th className="py-2 px-2 text-white font-bold uppercase text-right w-[22%]">LINE TOTAL</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {parsedItems.filter((i) => i.qtyNum > 0 || i.description || i.priceNum > 0).map((item, idx) => (
-                    <tr key={item.id} className={idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                      <td className="py-2 px-2 border-b border-gray-100">{item.qty || '—'}</td>
-                      <td className="py-2 px-2 border-b border-gray-100">{item.description || '—'}</td>
-                      <td className="py-2 px-2 border-b border-gray-100">{item.priceNum > 0 ? fmt(item.priceNum, campaign.currency) : '—'}</td>
-                      <td className="py-2 px-2 border-b border-gray-100">{item.lineTotalNum > 0 ? fmt(item.lineTotalNum, campaign.currency) : '—'}</td>
+                  {parsedItems.filter((i) => i.qtyNum > 0 || i.description || i.priceNum > 0).map((item) => (
+                    <tr key={item.id} className="border-b border-gray-200" style={{ height: 26 }}>
+                      <td className="py-1.5 px-2 text-gray-700">{item.qty || ''}</td>
+                      <td className="py-1.5 px-2 text-gray-800">{item.description || ''}</td>
+                      <td className="py-1.5 px-2 text-right text-gray-800">
+                        {item.priceNum > 0 ? fmt(item.priceNum, campaign.currency) : ''}
+                      </td>
+                      <td className="py-1.5 px-2 text-right text-gray-800">
+                        {item.lineTotalNum > 0 ? fmt(item.lineTotalNum, campaign.currency) : ''}
+                      </td>
                     </tr>
                   ))}
-                  <tr className="bg-gray-50">
-                    <td colSpan={3} className="py-2 px-2 text-right font-bold text-[11px]" style={{ color: pc }}>VAT @ 7.5%</td>
-                    <td className="py-2 px-2">{fmt(vatAmount, campaign.currency)}</td>
+                  {/* VAT row */}
+                  <tr className="border-b border-gray-200" style={{ height: 26 }}>
+                    <td className="py-1.5 px-2"></td>
+                    <td className="py-1.5 px-2 text-gray-800">Vat@ 7.5%</td>
+                    <td className="py-1.5 px-2"></td>
+                    <td className="py-1.5 px-2 text-right text-gray-800">
+                      {vatAmount > 0 ? fmt(vatAmount, campaign.currency) : ''}
+                    </td>
                   </tr>
+                  {/* Empty rows */}
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={`empty-${i}`} className="border-b border-gray-200" style={{ height: 26 }}>
+                      <td className="px-2"></td>
+                      <td className="px-2"></td>
+                      <td className="px-2"></td>
+                      <td className="px-2"></td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
+            </div>
 
-              <div className="flex justify-end mt-3 gap-3 items-center">
-                <span className="font-bold text-[11px]" style={{ color: pc }}>TOTAL</span>
-                <span className="border-2 px-4 py-1.5 text-[11px] font-bold text-gray-900 rounded"
-                  style={{ borderColor: pc }}>
-                  {fmt(totalAmount, campaign.currency)}
-                </span>
+            {/* ── TOTAL ── */}
+            <div className="px-8 pb-4 flex justify-end items-center gap-3">
+              <span className="font-bold text-sm" style={{ color: pc }}>TOTAL</span>
+              <div className="border-2 px-4 py-1.5 font-bold text-sm text-gray-900" style={{ borderColor: pc }}>
+                {fmt(totalAmount, campaign.currency)}
               </div>
             </div>
 
-            {/* Amount in words */}
-            <div className="px-8 pb-3">
-              <span className="font-bold text-[10px]" style={{ color: pc }}>AMOUNT IN WORDS: </span>
-              <span className="text-[10px] text-gray-700">{amountInWords}</span>
+            {/* ── Amount in words ── */}
+            <div className="px-8 pb-5 flex gap-2 flex-wrap text-[10px]">
+              <span className="font-bold shrink-0" style={{ color: pc }}>AMOUNT IN WORDS:</span>
+              <span className="text-gray-800 leading-relaxed">{amountInWords}</span>
             </div>
 
-            <div className="px-8 pb-5 text-center space-y-1">
-              <p className="text-[10px] font-bold" style={{ color: pc }}>THANK YOU FOR YOUR BUSINESS</p>
-              <p className="text-[10px] text-gray-400">NOTE: All cheques should be in favor of {orgName}</p>
+            {/* ── Footer ── */}
+            <div className="mx-8 mb-6 border-t border-gray-100 pt-4 space-y-2">
+              <div className="text-center font-bold text-[11px]" style={{ color: pc }}>
+                THANK YOU FOR YOUR BUSINESS
+              </div>
+              <div className="text-center text-[10px] text-gray-500">
+                NOTE: All cheques should be in favor of {orgName}
+              </div>
             </div>
+
           </div>
         </div>
       </div>

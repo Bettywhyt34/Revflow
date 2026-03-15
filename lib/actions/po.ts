@@ -1,6 +1,5 @@
 'use server'
 
-import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
@@ -22,7 +21,7 @@ export interface LogPoInput {
 
 export async function logPoReceivedAction(
   input: LogPoInput,
-): Promise<{ error: string } | never> {
+): Promise<{ error: string } | { ok: true }> {
   const session = await auth()
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
@@ -60,6 +59,7 @@ export async function logPoReceivedAction(
       exchange_rate: 1,
       issue_date: input.poDate,
       file_url: input.fileUrl,
+      file_path: input.filePath,
       recipient_name: campaign.title,
       notes: input.notes
         ? `PO Ref: ${input.poNumber}. ${input.notes}`
@@ -136,6 +136,34 @@ export async function logPoReceivedAction(
 
   await supabase.from('notifications').insert(notifs)
 
+  // ── Auto-post journal entries if invoice already exists ──────────────────
+  const { data: invDocs } = await supabase
+    .from('documents')
+    .select('id, amount_before_vat, agency_fee_amount, total_amount')
+    .eq('campaign_id', input.campaignId)
+    .eq('type', 'invoice')
+    .limit(1)
+
+  if (invDocs?.[0]) {
+    const inv = invDocs[0]
+    const baseEntry = {
+      org_id: orgId,
+      campaign_id: input.campaignId,
+      document_id: inv.id,
+      source_app: 'revflow',
+      transaction_date: input.poDate,
+      created_by: session.user.id,
+      reference: `PO-${input.poNumber}`,
+    }
+    await supabase.from('journal_entries').insert([
+      { ...baseEntry, account_code: '1100', debit: inv.total_amount ?? 0,        credit: 0,                           description: 'AR raised on PO receipt' },
+      { ...baseEntry, account_code: '4000', debit: 0,                            credit: inv.amount_before_vat ?? 0,  description: 'Revenue recognised' },
+      ...((inv.agency_fee_amount ?? 0) > 0 ? [
+        { ...baseEntry, account_code: '4100', debit: 0,                          credit: inv.agency_fee_amount ?? 0,  description: 'Agency fee recognised' },
+      ] : []),
+    ])
+  }
+
   revalidatePath(`/campaigns/${input.campaignId}`)
-  redirect(`/campaigns/${input.campaignId}`)
+  return { ok: true as const }
 }

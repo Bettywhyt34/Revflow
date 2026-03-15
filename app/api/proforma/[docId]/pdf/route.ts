@@ -9,11 +9,10 @@ import type { ProformaInvoiceData, PdfLineItem } from '@/components/documents/pr
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
+  const d = new Date(iso)
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  return `${day}/${month}/${d.getUTCFullYear()}`
 }
 
 function buildSubject(

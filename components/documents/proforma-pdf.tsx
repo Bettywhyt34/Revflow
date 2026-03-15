@@ -24,7 +24,7 @@ export interface ProformaInvoiceData {
   primaryColor: string
   documentTitle?: string   // defaults to "PROFORMA INVOICE"
   invoiceNumber: string
-  issueDate: string
+  issueDate: string        // Pre-formatted string, e.g. "15/03/2026"
   recipientName: string
   recipientAddress: string | null
   customerId: string
@@ -37,117 +37,127 @@ export interface ProformaInvoiceData {
   notes: string | null
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Amount formatter ────────────────────────────────────────────────────────
 
 function fmtAmt(amount: number, currency: string): string {
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency,
+  const n = amount.toLocaleString('en-US', {
     minimumFractionDigits: 2,
-  }).format(amount)
+    maximumFractionDigits: 2,
+  })
+  // Use ₦ unicode for NGN; ISO code + space for everything else
+  const sym = currency === 'NGN' ? '\u20A6' : currency + ' '
+  return sym + n
 }
+
+// ── Amount in words ─────────────────────────────────────────────────────────
 
 function toNairaWords(amount: number): string {
   const naira = Math.floor(amount)
   const kobo = Math.round((amount - naira) * 100)
-  let result = toWords(naira).toUpperCase()
-  result += ' NAIRA'
-  if (kobo > 0) {
-    result += ', ' + toWords(kobo).toUpperCase() + ' KOBO'
-  }
+  let result = toWords(naira).toUpperCase() + ' NAIRA'
+  if (kobo > 0) result += ', ' + toWords(kobo).toUpperCase() + ' KOBO'
   return result + ' ONLY'
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────
+// ── Styles ──────────────────────────────────────────────────────────────────
 
 function buildStyles(primaryColor: string) {
   return StyleSheet.create({
     page: {
       backgroundColor: '#ffffff',
-      paddingHorizontal: 42,
-      paddingVertical: 36,
+      paddingHorizontal: 40,
+      paddingTop: 36,
+      paddingBottom: 40,
       fontFamily: 'Helvetica',
       fontSize: 10,
       color: '#1a1a1a',
+      display: 'flex',
+      flexDirection: 'column',
     },
-    // Header
+    // ── Header ──────────────────────────────────────────────────────────────
     headerRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
-      marginBottom: 10,
+      marginBottom: 14,
     },
     logo: {
-      width: 100,
-      height: 48,
+      width: 140,
+      height: 64,
       objectFit: 'contain',
     },
     orgNameText: {
-      fontSize: 20,
+      fontSize: 22,
       fontFamily: 'Helvetica-Bold',
       color: primaryColor,
     },
-    proformaTitle: {
-      fontSize: 18,
+    titleBlock: {
+      alignItems: 'flex-end',
+      justifyContent: 'center',
+      paddingTop: 4,
+    },
+    documentTitle: {
+      fontSize: 26,
       fontFamily: 'Helvetica-Bold',
       color: '#1a1a4e',
       textAlign: 'right',
     },
-    // Divider
+    // ── Divider ─────────────────────────────────────────────────────────────
     divider: {
-      borderBottomWidth: 2,
+      borderBottomWidth: 3,
       borderBottomColor: primaryColor,
-      marginBottom: 14,
+      marginBottom: 18,
     },
-    // Meta block
+    // ── Meta block ──────────────────────────────────────────────────────────
     metaRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
+      alignItems: 'flex-start',
       marginBottom: 16,
     },
     metaLeft: {
-      flexDirection: 'column',
-    },
-    metaLineRow: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
-      marginBottom: 4,
+      gap: 28,
+    },
+    metaItem: {
+      flexDirection: 'column',
+      minWidth: 80,
     },
     metaLabel: {
-      fontSize: 9,
+      fontSize: 8,
       fontFamily: 'Helvetica-Bold',
       color: primaryColor,
-      width: 80,
+      marginBottom: 4,
+      textTransform: 'uppercase',
     },
     metaValue: {
-      fontSize: 9,
+      fontSize: 10,
+      fontFamily: 'Helvetica-Bold',
       color: '#1a1a1a',
-      flex: 1,
     },
     metaRight: {
-      flexDirection: 'column',
       alignItems: 'flex-end',
     },
     toLabel: {
-      fontSize: 9,
+      fontSize: 8,
       fontFamily: 'Helvetica-Bold',
       color: primaryColor,
       marginBottom: 4,
     },
     toName: {
-      fontSize: 10,
+      fontSize: 11,
       fontFamily: 'Helvetica-Bold',
       color: '#1a1a1a',
       textAlign: 'right',
     },
     toAddress: {
       fontSize: 9,
-      color: '#666666',
+      color: '#555555',
       textAlign: 'right',
-      marginTop: 2,
+      marginTop: 4,
       maxWidth: 180,
     },
-    // Subject section
+    // ── Subject ──────────────────────────────────────────────────────────────
     subjectLabel: {
       fontSize: 9,
       fontFamily: 'Helvetica-Bold',
@@ -157,69 +167,76 @@ function buildStyles(primaryColor: string) {
     subjectBox: {
       borderWidth: 1,
       borderColor: primaryColor,
-      paddingHorizontal: 8,
-      paddingVertical: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
       marginBottom: 14,
-      borderRadius: 2,
     },
     subjectText: {
       fontSize: 9,
       color: '#1a1a1a',
     },
-    // Table
+    // ── Table ────────────────────────────────────────────────────────────────
     tableHeader: {
       flexDirection: 'row',
       backgroundColor: primaryColor,
-      paddingVertical: 6,
-      paddingHorizontal: 4,
+      paddingVertical: 7,
+      paddingHorizontal: 6,
     },
     tableHeaderCell: {
       color: '#ffffff',
       fontFamily: 'Helvetica-Bold',
       fontSize: 8,
+      textTransform: 'uppercase',
     },
     tableRow: {
       flexDirection: 'row',
       borderBottomWidth: 1,
-      borderBottomColor: '#e5e7eb',
-      paddingVertical: 5,
-      paddingHorizontal: 4,
-      minHeight: 22,
+      borderBottomColor: '#d1d5db',
+      paddingVertical: 6,
+      paddingHorizontal: 6,
+      minHeight: 26,
+    },
+    emptyRow: {
+      flexDirection: 'row',
+      borderBottomWidth: 1,
+      borderBottomColor: '#d1d5db',
+      height: 26,
+      paddingHorizontal: 6,
     },
     // Column widths
-    colQty: { width: '8%' },
-    colDesc: { width: '47%' },
+    colQty:       { width: '8%' },
+    colDesc:      { width: '47%' },
     colUnitPrice: { width: '23%', textAlign: 'right' },
-    colTotal: { width: '22%', textAlign: 'right' },
-    cellText: { fontSize: 9, color: '#1a1a1a' },
-    cellTextGray: { fontSize: 9, color: '#999999' },
-    // Total section
+    colTotal:     { width: '22%', textAlign: 'right' },
+    cellText:     { fontSize: 9, color: '#1a1a1a' },
+    // ── Spacer ───────────────────────────────────────────────────────────────
+    spacer: { flexGrow: 1, minHeight: 12 },
+    // ── Total ────────────────────────────────────────────────────────────────
     totalSection: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       alignItems: 'center',
-      marginTop: 12,
+      marginTop: 14,
       marginBottom: 16,
     },
     totalLabel: {
-      fontSize: 11,
+      fontSize: 12,
       fontFamily: 'Helvetica-Bold',
       color: primaryColor,
-      marginRight: 12,
+      marginRight: 14,
     },
     totalBox: {
       borderWidth: 2,
       borderColor: primaryColor,
-      paddingHorizontal: 12,
-      paddingVertical: 5,
-      borderRadius: 2,
+      paddingHorizontal: 16,
+      paddingVertical: 6,
     },
     totalAmount: {
-      fontSize: 11,
+      fontSize: 12,
       fontFamily: 'Helvetica-Bold',
       color: '#1a1a1a',
     },
-    // Amount in words
+    // ── Amount in words ──────────────────────────────────────────────────────
     amountInWordsRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -227,7 +244,7 @@ function buildStyles(primaryColor: string) {
       flexWrap: 'wrap',
     },
     amountInWordsLabel: {
-      fontSize: 9,
+      fontSize: 8,
       fontFamily: 'Helvetica-Bold',
       color: primaryColor,
       marginRight: 6,
@@ -237,23 +254,30 @@ function buildStyles(primaryColor: string) {
       color: '#1a1a1a',
       flex: 1,
     },
-    // Footer
+    // ── Footer ───────────────────────────────────────────────────────────────
+    footer: {
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderTopColor: '#e5e7eb',
+    },
     thankYou: {
       fontSize: 10,
       fontFamily: 'Helvetica-Bold',
       color: primaryColor,
       textAlign: 'center',
-      marginBottom: 6,
+      marginBottom: 8,
     },
     noteText: {
-      fontSize: 9,
+      fontSize: 8,
       color: '#666666',
       textAlign: 'center',
     },
   })
 }
 
-// ── PDF Component ───────────────────────────────────────────────────────────
+// ── PDF Component ────────────────────────────────────────────────────────────
+
+const EMPTY_ROWS = 5
 
 export default function ProformaInvoicePDF({ data }: { data: ProformaInvoiceData }) {
   const styles = buildStyles(data.primaryColor)
@@ -262,7 +286,8 @@ export default function ProformaInvoicePDF({ data }: { data: ProformaInvoiceData
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Header */}
+
+        {/* ── Header ── */}
         <View style={styles.headerRow}>
           <View>
             {data.logoUrl ? (
@@ -271,29 +296,31 @@ export default function ProformaInvoicePDF({ data }: { data: ProformaInvoiceData
               <Text style={styles.orgNameText}>{data.orgName}</Text>
             )}
           </View>
-          <View>
-            <Text style={styles.proformaTitle}>{data.documentTitle ?? 'PROFORMA INVOICE'}</Text>
+          <View style={styles.titleBlock}>
+            <Text style={styles.documentTitle}>
+              {data.documentTitle ?? 'PROFORMA INVOICE'}
+            </Text>
           </View>
         </View>
 
-        {/* Divider */}
+        {/* ── Divider ── */}
         <View style={styles.divider} />
 
-        {/* Meta block */}
+        {/* ── Meta block: DATE / INVOICE# / CUSTOMER ID | TO ── */}
         <View style={styles.metaRow}>
           <View style={styles.metaLeft}>
-            <View style={styles.metaLineRow}>
-              <Text style={styles.metaLabel}>DATE:</Text>
-              <Text style={styles.metaValue}>{data.issueDate}</Text>
-            </View>
-            <View style={styles.metaLineRow}>
-              <Text style={styles.metaLabel}>INVOICE #:</Text>
-              <Text style={styles.metaValue}>{data.invoiceNumber}</Text>
-            </View>
-            <View style={styles.metaLineRow}>
-              <Text style={styles.metaLabel}>CUSTOMER ID:</Text>
-              <Text style={styles.metaValue}>{data.customerId}</Text>
-            </View>
+            {(
+              [
+                ['DATE', data.issueDate],
+                ['INVOICE #', data.invoiceNumber],
+                ['CUSTOMER ID', data.customerId],
+              ] as [string, string][]
+            ).map(([label, value]) => (
+              <View key={label} style={styles.metaItem}>
+                <Text style={styles.metaLabel}>{label}</Text>
+                <Text style={styles.metaValue}>{value}</Text>
+              </View>
+            ))}
           </View>
           <View style={styles.metaRight}>
             <Text style={styles.toLabel}>TO:</Text>
@@ -304,13 +331,13 @@ export default function ProformaInvoicePDF({ data }: { data: ProformaInvoiceData
           </View>
         </View>
 
-        {/* Subject */}
+        {/* ── Subject ── */}
         <Text style={styles.subjectLabel}>SUBJECT:</Text>
         <View style={styles.subjectBox}>
           <Text style={styles.subjectText}>{data.invoiceSubject}</Text>
         </View>
 
-        {/* Table header */}
+        {/* ── Table header ── */}
         <View style={styles.tableHeader}>
           <Text style={[styles.tableHeaderCell, styles.colQty]}>QTY</Text>
           <Text style={[styles.tableHeaderCell, styles.colDesc]}>DESCRIPTION</Text>
@@ -318,10 +345,12 @@ export default function ProformaInvoicePDF({ data }: { data: ProformaInvoiceData
           <Text style={[styles.tableHeaderCell, styles.colTotal]}>LINE TOTAL</Text>
         </View>
 
-        {/* Line item rows */}
+        {/* ── Line item rows ── */}
         {data.lineItems.map((item, i) => (
           <View key={i} style={styles.tableRow}>
-            <Text style={[styles.cellText, styles.colQty]}>{item.qty > 0 ? String(item.qty) : ''}</Text>
+            <Text style={[styles.cellText, styles.colQty]}>
+              {item.qty > 0 ? String(item.qty) : ''}
+            </Text>
             <Text style={[styles.cellText, styles.colDesc]}>{item.description}</Text>
             <Text style={[styles.cellText, styles.colUnitPrice]}>
               {item.unitPrice > 0 ? fmtAmt(item.unitPrice, data.currency) : ''}
@@ -332,17 +361,30 @@ export default function ProformaInvoicePDF({ data }: { data: ProformaInvoiceData
           </View>
         ))}
 
-        {/* VAT row */}
+        {/* ── VAT row ── */}
         <View style={styles.tableRow}>
-          <Text style={[styles.cellTextGray, styles.colQty]}></Text>
-          <Text style={[styles.cellText, styles.colDesc]}>VAT @ 7.5%</Text>
-          <Text style={[styles.cellTextGray, styles.colUnitPrice]}></Text>
+          <Text style={[styles.cellText, styles.colQty]}>{''}</Text>
+          <Text style={[styles.cellText, styles.colDesc]}>Vat@ 7.5%</Text>
+          <Text style={[styles.cellText, styles.colUnitPrice]}>{''}</Text>
           <Text style={[styles.cellText, styles.colTotal]}>
             {data.vatAmount > 0 ? fmtAmt(data.vatAmount, data.currency) : ''}
           </Text>
         </View>
 
-        {/* TOTAL */}
+        {/* ── Empty rows (fill page) ── */}
+        {Array.from({ length: EMPTY_ROWS }).map((_, i) => (
+          <View key={`empty-${i}`} style={styles.emptyRow}>
+            <Text style={[styles.cellText, styles.colQty]}>{' '}</Text>
+            <Text style={[styles.cellText, styles.colDesc]}>{' '}</Text>
+            <Text style={[styles.cellText, styles.colUnitPrice]}>{' '}</Text>
+            <Text style={[styles.cellText, styles.colTotal]}>{' '}</Text>
+          </View>
+        ))}
+
+        {/* ── Flexible spacer — pushes summary to bottom ── */}
+        <View style={styles.spacer} />
+
+        {/* ── TOTAL ── */}
         <View style={styles.totalSection}>
           <Text style={styles.totalLabel}>TOTAL</Text>
           <View style={styles.totalBox}>
@@ -350,21 +392,22 @@ export default function ProformaInvoicePDF({ data }: { data: ProformaInvoiceData
           </View>
         </View>
 
-        {/* Amount in words */}
+        {/* ── Amount in words ── */}
         <View style={styles.amountInWordsRow}>
           <Text style={styles.amountInWordsLabel}>AMOUNT IN WORDS:</Text>
           <Text style={styles.amountInWordsText}>{amountInWords}</Text>
         </View>
 
-        {/* Thank you */}
-        <Text style={styles.thankYou}>THANK YOU FOR YOUR BUSINESS</Text>
+        {/* ── Footer ── */}
+        <View style={styles.footer}>
+          <Text style={styles.thankYou}>THANK YOU FOR YOUR BUSINESS</Text>
+          <Text style={styles.noteText}>
+            {data.notes
+              ? `NOTE: ${data.notes}`
+              : `NOTE: All cheques should be in favor of ${data.orgName}`}
+          </Text>
+        </View>
 
-        {/* Note */}
-        <Text style={styles.noteText}>
-          {data.notes
-            ? `NOTE: ${data.notes}`
-            : `NOTE: All cheques should be in favor of ${data.orgName}`}
-        </Text>
       </Page>
     </Document>
   )

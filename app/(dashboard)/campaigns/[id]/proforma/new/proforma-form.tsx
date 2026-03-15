@@ -36,11 +36,10 @@ function fmt(amount: number, currency: string): string {
 
 function fmtDate(iso: string): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  })
+  const d = new Date(iso)
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  return `${day}/${month}/${d.getUTCFullYear()}`
 }
 
 function today(): string {
@@ -136,41 +135,44 @@ function ProformaPreview(p: PreviewProps) {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden text-xs font-sans select-none">
-      {/* Header */}
-      <div className="px-8 pt-6 pb-3 flex justify-between items-start gap-4">
+
+      {/* ── Header ── */}
+      <div className="px-8 pt-7 pb-3 flex justify-between items-start gap-4">
         <div>
           {p.orgLogoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.orgLogoUrl} alt={p.orgName} className="h-12 max-w-[140px] object-contain" />
+            <img src={p.orgLogoUrl} alt={p.orgName} className="h-14 max-w-[150px] object-contain" />
           ) : (
-            <span className="text-xl font-extrabold" style={{ color: pc }}>{p.orgName}</span>
+            <span className="text-2xl font-extrabold leading-none" style={{ color: pc }}>{p.orgName}</span>
           )}
         </div>
-        <div className="text-right">
-          <div className="text-base font-bold" style={{ color: '#1a1a4e' }}>PROFORMA INVOICE</div>
+        <div className="text-right pt-1">
+          <div className="text-xl font-extrabold leading-tight" style={{ color: '#1a1a4e' }}>
+            PROFORMA INVOICE
+          </div>
         </div>
       </div>
 
-      {/* Divider */}
-      <hr className="mx-8 mb-4" style={{ borderColor: pc, borderTopWidth: 2 }} />
+      {/* ── Divider ── */}
+      <hr className="mx-8 mb-5" style={{ borderColor: pc, borderTopWidth: 3 }} />
 
-      {/* Meta: LEFT = date/invoice/customer, RIGHT = TO */}
+      {/* ── Meta: LEFT stacked DATE/INVOICE#/CUSTOMER ID | RIGHT TO ── */}
       <div className="px-8 pb-5 flex justify-between gap-6">
-        <div className="space-y-1.5">
+        <div className="flex gap-7">
           {[
-            ['DATE:', p.issueDate ? fmtDate(p.issueDate) : '—'],
-            ['INVOICE #:', p.docNumber || '— (assigned on save)'],
-            ['CUSTOMER ID:', customerId],
+            ['DATE', p.issueDate ? fmtDate(p.issueDate) : '—'],
+            ['INVOICE #', p.docNumber || '(on save)'],
+            ['CUSTOMER ID', customerId],
           ].map(([label, value]) => (
-            <div key={label} className="flex gap-1.5">
-              <span className="font-bold w-24 shrink-0 text-[11px]" style={{ color: pc }}>{label}</span>
-              <span className="text-gray-800 text-[11px]">{value}</span>
+            <div key={label}>
+              <div className="font-bold text-[9px] uppercase mb-1" style={{ color: pc }}>{label}</div>
+              <div className="font-bold text-gray-900 text-[11px]">{value}</div>
             </div>
           ))}
         </div>
         <div className="text-right">
-          <div className="font-bold mb-1.5 text-[11px]" style={{ color: pc }}>TO:</div>
-          <div className="font-bold text-gray-900">{p.recipientName || '—'}</div>
+          <div className="font-bold text-[9px] uppercase mb-1" style={{ color: pc }}>TO</div>
+          <div className="font-bold text-gray-900 text-[11px]">{p.recipientName || '—'}</div>
           {p.recipientAddress && (
             <div className="text-gray-500 mt-1 whitespace-pre-line max-w-[180px] text-right text-[10px]">
               {p.recipientAddress}
@@ -179,15 +181,15 @@ function ProformaPreview(p: PreviewProps) {
         </div>
       </div>
 
-      {/* Subject */}
+      {/* ── Subject ── */}
       <div className="px-8 pb-4">
-        <div className="font-bold mb-1.5 text-[11px]" style={{ color: pc }}>SUBJECT:</div>
-        <div className="border rounded px-3 py-2 text-gray-800" style={{ borderColor: pc }}>
+        <div className="font-bold text-[9px] uppercase mb-1.5" style={{ color: pc }}>SUBJECT:</div>
+        <div className="border px-3 py-2 text-[11px] text-gray-800" style={{ borderColor: pc }}>
           {p.subject || <span className="text-gray-400 italic">Enter subject…</span>}
         </div>
       </div>
 
-      {/* Line items table */}
+      {/* ── Line items table ── */}
       <div className="px-8 pb-3 overflow-x-auto">
         <table className="w-full border-collapse text-[11px]">
           <thead>
@@ -204,59 +206,69 @@ function ProformaPreview(p: PreviewProps) {
               const price = parseFloat(item.unitPrice) || 0
               const lineTotal = qty * price
               return (
-                <tr key={item.id} className="border-b border-gray-100">
-                  <td className="py-2 px-2 text-gray-700">{item.qty || ''}</td>
-                  <td className="py-2 px-2 text-gray-800">{item.description || ''}</td>
-                  <td className="py-2 px-2 text-right text-gray-800">
+                <tr key={item.id} className="border-b border-gray-200" style={{ height: 26 }}>
+                  <td className="py-1.5 px-2 text-gray-700">{item.qty || ''}</td>
+                  <td className="py-1.5 px-2 text-gray-800">{item.description || ''}</td>
+                  <td className="py-1.5 px-2 text-right text-gray-800">
                     {price > 0 ? fmt(price, p.campaign.currency) : ''}
                   </td>
-                  <td className="py-2 px-2 text-right text-gray-800">
+                  <td className="py-1.5 px-2 text-right text-gray-800">
                     {lineTotal > 0 ? fmt(lineTotal, p.campaign.currency) : ''}
                   </td>
                 </tr>
               )
             })}
             {/* VAT row */}
-            <tr className="border-b border-gray-100">
-              <td className="py-2 px-2"></td>
-              <td className="py-2 px-2 text-gray-800">VAT @ 7.5%</td>
-              <td className="py-2 px-2"></td>
-              <td className="py-2 px-2 text-right text-gray-800">
+            <tr className="border-b border-gray-200" style={{ height: 26 }}>
+              <td className="py-1.5 px-2"></td>
+              <td className="py-1.5 px-2 text-gray-800">Vat@ 7.5%</td>
+              <td className="py-1.5 px-2"></td>
+              <td className="py-1.5 px-2 text-right text-gray-800">
                 {p.vatAmount > 0 ? fmt(p.vatAmount, p.campaign.currency) : ''}
               </td>
             </tr>
+            {/* Empty rows */}
+            {Array.from({ length: 5 }).map((_, i) => (
+              <tr key={`empty-${i}`} className="border-b border-gray-200" style={{ height: 26 }}>
+                <td className="px-2"></td>
+                <td className="px-2"></td>
+                <td className="px-2"></td>
+                <td className="px-2"></td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
-      {/* TOTAL */}
+      {/* ── TOTAL ── */}
       <div className="px-8 pb-4 flex justify-end items-center gap-3">
         <span className="font-bold text-sm" style={{ color: pc }}>TOTAL</span>
         <div
-          className="border-2 rounded px-4 py-1.5 font-bold text-sm text-gray-900"
+          className="border-2 px-4 py-1.5 font-bold text-sm text-gray-900"
           style={{ borderColor: pc }}
         >
           {fmt(p.totalAmount, p.campaign.currency)}
         </div>
       </div>
 
-      {/* Amount in words */}
-      <div className="px-8 pb-4 flex gap-2 text-[10px]">
+      {/* ── Amount in words ── */}
+      <div className="px-8 pb-5 flex gap-2 flex-wrap text-[10px]">
         <span className="font-bold shrink-0" style={{ color: pc }}>AMOUNT IN WORDS:</span>
         <span className="text-gray-800 leading-relaxed">{p.amountInWords}</span>
       </div>
 
-      {/* Thank you */}
-      <div className="px-8 pb-2 text-center font-bold text-[11px]" style={{ color: pc }}>
-        THANK YOU FOR YOUR BUSINESS
+      {/* ── Footer ── */}
+      <div className="mx-8 mb-6 border-t border-gray-100 pt-4 space-y-2">
+        <div className="text-center font-bold text-[11px]" style={{ color: pc }}>
+          THANK YOU FOR YOUR BUSINESS
+        </div>
+        <div className="text-center text-[10px] text-gray-500">
+          {p.notes
+            ? `NOTE: ${p.notes}`
+            : `NOTE: All cheques should be in favor of ${p.orgName}`}
+        </div>
       </div>
 
-      {/* Note */}
-      <div className="px-8 pb-6 text-center text-[10px] text-gray-500">
-        {p.notes
-          ? `NOTE: ${p.notes}`
-          : `NOTE: All cheques should be in favor of ${p.orgName}`}
-      </div>
     </div>
   )
 }
