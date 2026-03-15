@@ -1,5 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import AppShell from '@/components/layout/app-shell'
+import type { UserRole } from '@/types'
 
 export default async function DashboardLayout({
   children,
@@ -12,9 +14,14 @@ export default async function DashboardLayout({
   if (!session.user?.role) redirect('/pending')
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Full nav shell added in Step 13 */}
-      <main className="flex-1">{children}</main>
-    </div>
+    <AppShell
+      user={{
+        name: session.user.name,
+        email: session.user.email,
+        role: session.user.role as UserRole,
+      }}
+    >
+      {children}
+    </AppShell>
   )
 }

@@ -1,0 +1,238 @@
+import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import { auth } from '@/lib/auth'
+import {
+  getCampaignById,
+  getCampaignPaymentsTotal,
+  getCampaignNotifications,
+} from '@/lib/data/campaigns'
+import StatusBadge from '@/components/campaigns/status-badge'
+import NextActionBadge from '@/components/campaigns/next-action-badge'
+import { ArrowLeft, Calendar, User, FileText, Bell } from 'lucide-react'
+import type { CampaignStatus, UserRole } from '@/types'
+import CampaignActions from './campaign-actions'
+
+function formatCurrency(value: number | null, currency = 'NGN'): string {
+  if (value == null) return '—'
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  })
+}
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+// ── Key figures ───────────────────────────────────────────────────────────────
+function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
+      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-xl font-bold text-gray-900 truncate">{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
+// ── Notification icon by type ─────────────────────────────────────────────────
+function notifDot(type: string): string {
+  const map: Record<string, string> = {
+    invoice_due: 'bg-amber-400',
+    payment_received: 'bg-green-400',
+    approval_required: 'bg-blue-400',
+    chase: 'bg-orange-400',
+    system: 'bg-teal-400',
+    compliance: 'bg-purple-400',
+  }
+  return map[type] ?? 'bg-gray-300'
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const session = await auth()
+  const campaign = await getCampaignById(id, session!.user.orgId)
+  return {
+    title: campaign ? `${campaign.tracker_id} — Revflow` : 'Campaign — Revflow',
+  }
+}
+
+export default async function CampaignDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const session = await auth()
+  const orgId = session!.user.orgId
+  const userRole = session!.user.role as UserRole
+
+  const [campaign, totalPaid, notifications] = await Promise.all([
+    getCampaignById(id, orgId),
+    getCampaignPaymentsTotal(id),
+    getCampaignNotifications(id),
+  ])
+
+  if (!campaign) notFound()
+
+  const status = campaign.status as CampaignStatus
+  const plannedValue = campaign.planned_contract_value
+  // Final billable = planned until compliance is uploaded
+  const finalBillable = plannedValue
+  const balance = finalBillable != null ? finalBillable - totalPaid : null
+
+  return (
+    <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6">
+      {/* Back nav */}
+      <Link
+        href="/campaigns"
+        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors min-h-[44px]"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Campaigns
+      </Link>
+
+      {/* Header card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="space-y-2 min-w-0">
+            {/* Tracker + status row */}
+            <div className="flex items-center flex-wrap gap-2">
+              <span className="font-mono text-sm font-bold text-[#0D9488]">
+                {campaign.tracker_id}
+              </span>
+              <StatusBadge status={status} />
+              <NextActionBadge status={status} />
+            </div>
+
+            {/* Title */}
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+              {campaign.title}
+            </h1>
+            <p className="text-base text-gray-500 font-medium">{campaign.advertiser}</p>
+
+            {/* Meta */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-gray-400">
+              {campaign.account_manager && (
+                <span className="flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5" />
+                  {campaign.account_manager.full_name}
+                </span>
+              )}
+              {campaign.plan_reference && (
+                <span className="flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5" />
+                  {campaign.plan_reference}
+                </span>
+              )}
+              <span className="flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5" />
+                Created {formatDate(campaign.created_at)}
+              </span>
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <CampaignActions
+            campaignId={campaign.id}
+            status={status}
+            userRole={userRole}
+          />
+        </div>
+      </div>
+
+      {/* KPI bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <KpiCard
+          label="Planned Value"
+          value={formatCurrency(plannedValue, campaign.currency)}
+        />
+        <KpiCard
+          label="Final Billable"
+          value={formatCurrency(finalBillable, campaign.currency)}
+          sub="After compliance"
+        />
+        <KpiCard
+          label="Collected"
+          value={formatCurrency(totalPaid, campaign.currency)}
+        />
+        <KpiCard
+          label="Balance"
+          value={formatCurrency(balance, campaign.currency)}
+          sub="Outstanding"
+        />
+        <KpiCard
+          label="Compliance"
+          value="—"
+          sub="Pending upload"
+        />
+      </div>
+
+      {/* Lower grid — documents + activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Document bundle (Step 10) */}
+        <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <FileText className="h-4 w-4 text-gray-400" />
+            Document Bundle
+          </h2>
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="h-10 w-10 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center mb-3">
+              <FileText className="h-5 w-5 text-gray-300" />
+            </div>
+            <p className="text-sm text-gray-400">No documents yet</p>
+            <p className="text-xs text-gray-300 mt-1">Documents are added in Steps 5–9</p>
+          </div>
+        </div>
+
+        {/* Activity timeline */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Bell className="h-4 w-4 text-gray-400" />
+            Activity
+          </h2>
+
+          {notifications.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <p className="text-sm text-gray-400">No activity yet</p>
+            </div>
+          ) : (
+            <ol className="relative border-l border-gray-100 ml-2 space-y-4">
+              {notifications.map((n) => (
+                <li key={n.id} className="ml-4">
+                  <span
+                    className={`absolute -left-1.5 mt-1 h-3 w-3 rounded-full border-2 border-white ${notifDot(n.type)}`}
+                  />
+                  <p className="text-xs font-semibold text-gray-700">{n.title}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{n.message}</p>
+                  <time className="text-[10px] text-gray-300">{formatDateTime(n.created_at)}</time>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </div>
+
+      {/* Notes (if any) */}
+      {campaign.notes && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
+          <p className="text-xs font-semibold text-amber-700 mb-1">Notes</p>
+          <p className="text-sm text-amber-900 whitespace-pre-wrap">{campaign.notes}</p>
+        </div>
+      )}
+    </div>
+  )
+}
