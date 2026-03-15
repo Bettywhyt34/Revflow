@@ -159,7 +159,7 @@ function ProformaPreview(p: PreviewProps) {
         <div className="space-y-1.5">
           {[
             ['DATE:', p.issueDate ? fmtDate(p.issueDate) : '—'],
-            ['INVOICE #:', p.docNumber || 'AUTO'],
+            ['INVOICE #:', p.docNumber || '— (assigned on save)'],
             ['CUSTOMER ID:', customerId],
           ].map(([label, value]) => (
             <div key={label} className="flex gap-1.5">
