@@ -114,6 +114,7 @@ export default function ClientForm({
   const [error, setError] = useState<string | null>(null)
 
   const [clientName, setClientName] = useState(client?.client_name ?? '')
+  const [customerId, setCustomerId] = useState(client?.customer_id ?? '')
   const [contactPerson, setContactPerson] = useState(client?.contact_person ?? '')
   const [email, setEmail] = useState(client?.email ?? '')
   const [ccEmails, setCcEmails] = useState<string[]>(client?.cc_emails ?? [])
@@ -132,6 +133,7 @@ export default function ClientForm({
     startTransition(async () => {
       const input = {
         clientName,
+        customerId: customerId.trim() || undefined,
         contactPerson,
         email,
         ccEmails,
@@ -166,6 +168,27 @@ export default function ClientForm({
           className={inputCls}
           style={{ '--tw-ring-color': '#0D9488' } as React.CSSProperties}
         />
+      </div>
+
+      {/* Customer ID */}
+      <div>
+        <Label>Customer ID</Label>
+        <input
+          value={customerId}
+          onChange={(e) => setCustomerId(e.target.value)}
+          placeholder={
+            isEditing
+              ? 'e.g. DAN-01'
+              : clientName.trim()
+                ? `Auto: ${clientName.trim().replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase() || 'CLI'}-01`
+                : 'Auto-generated on save (e.g. TGI-01)'
+          }
+          className={inputCls}
+          style={{ '--tw-ring-color': '#0D9488' } as React.CSSProperties}
+        />
+        <p className="text-xs text-gray-400 mt-1">
+          Used on proformas and invoices. Auto-generated from the client name if left blank.
+        </p>
       </div>
 
       {!compact && (

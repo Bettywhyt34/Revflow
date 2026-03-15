@@ -99,6 +99,7 @@ export interface Client {
   id: string
   org_id: string
   client_name: string
+  customer_id: string | null
   contact_person: string | null
   email: string | null
   cc_emails: string[]
@@ -118,9 +119,9 @@ export interface CampaignWithRelations extends Campaign {
   client: {
     id: string
     client_name: string
+    customer_id: string | null
     email: string | null
     cc_emails: string[]
     address: string | null
-    client_code: string | null
   } | null
 }

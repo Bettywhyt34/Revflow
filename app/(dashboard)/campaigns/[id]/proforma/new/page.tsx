@@ -47,7 +47,7 @@ export default async function NewProformaPage({
         clientCcEmails={client?.cc_emails ?? []}
         clientName={client?.client_name ?? null}
         clientAddress={client?.address ?? null}
-        clientCode={client?.client_code ?? null}
+        clientCustomerId={client?.customer_id ?? null}
       />
     </div>
   )

@@ -51,18 +51,18 @@ export async function GET(
   }
 
   // Fetch client data if available
-  let clientCode: string | null = null
+  let clientCustomerId: string | null = null
   let clientAddress: string | null = null
 
   if (doc.campaign.client_id) {
     const { data: clientRow } = await createAdminClient()
       .from('clients')
-      .select('client_code, address')
+      .select('customer_id, address')
       .eq('id', doc.campaign.client_id)
       .maybeSingle()
 
-    const row = clientRow as { client_code?: string | null; address?: string | null } | null
-    clientCode = row?.client_code ?? null
+    const row = clientRow as { customer_id?: string | null; address?: string | null } | null
+    clientCustomerId = row?.customer_id ?? null
     clientAddress = row?.address ?? null
   }
 
@@ -94,7 +94,7 @@ export async function GET(
     issueDate: fmtDate(doc.issue_date),
     recipientName: doc.recipient_name ?? doc.campaign.advertiser,
     recipientAddress: clientAddress,
-    customerId: clientCode ?? doc.campaign.tracker_id,
+    customerId: clientCustomerId ?? '—',
     invoiceSubject: buildSubject(
       doc.invoice_subject,
       doc.campaign.title,

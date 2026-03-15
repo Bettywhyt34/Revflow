@@ -113,7 +113,7 @@ interface PreviewProps {
   campaign: Campaign
   recipientName: string
   recipientAddress: string | null
-  clientCode: string | null
+  clientCustomerId: string | null
   issueDate: string
   recognitionStart: string
   recognitionEnd: string
@@ -132,7 +132,7 @@ interface PreviewProps {
 
 function ProformaPreview(p: PreviewProps) {
   const pc = p.primaryColor
-  const customerId = p.clientCode ?? p.campaign.tracker_id
+  const customerId = p.clientCustomerId ?? '—'
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden text-xs font-sans select-none">
@@ -270,7 +270,7 @@ export default function ProformaForm({
   clientCcEmails,
   clientName,
   clientAddress,
-  clientCode,
+  clientCustomerId,
 }: {
   campaignId: string
   campaign: Campaign
@@ -278,7 +278,7 @@ export default function ProformaForm({
   clientCcEmails?: string[]
   clientName?: string | null
   clientAddress?: string | null
-  clientCode?: string | null
+  clientCustomerId?: string | null
 }) {
   const { primaryColor, logoUrl: orgLogoUrl, orgName } = useOrgSettings()
   const [isPending, startTransition] = useTransition()
@@ -737,7 +737,7 @@ export default function ProformaForm({
             campaign={campaign}
             recipientName={recipientName}
             recipientAddress={clientAddress ?? null}
-            clientCode={clientCode ?? null}
+            clientCustomerId={clientCustomerId ?? null}
             issueDate={issueDate}
             recognitionStart={recognitionStart}
             recognitionEnd={recognitionEnd}

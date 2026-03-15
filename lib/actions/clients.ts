@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase'
 
 export interface ClientInput {
   clientName: string
+  customerId?: string   // manual override; auto-generated if blank
   contactPerson?: string
   email?: string
   ccEmails?: string[]
@@ -31,11 +32,23 @@ export async function createClientAction(
   if (!input.clientName.trim()) return { error: 'Client name is required.' }
 
   const supabase = createAdminClient()
+
+  // Auto-generate customer_id if not manually provided
+  let customerId = input.customerId?.trim() || null
+  if (!customerId) {
+    const { data: genId } = await supabase.rpc('generate_customer_id', {
+      p_org_id: orgId,
+      p_name: input.clientName.trim(),
+    })
+    customerId = genId as string | null
+  }
+
   const { data, error } = await supabase
     .from('clients')
     .insert({
       org_id: orgId,
       client_name: input.clientName.trim(),
+      customer_id: customerId,
       contact_person: input.contactPerson?.trim() || null,
       email: input.email?.trim() || null,
       cc_emails: input.ccEmails ?? [],
@@ -72,20 +85,24 @@ export async function updateClientAction(
   }
 
   const supabase = createAdminClient()
+  const updateData: Record<string, unknown> = {
+    client_name: input.clientName.trim(),
+    contact_person: input.contactPerson?.trim() || null,
+    email: input.email?.trim() || null,
+    cc_emails: input.ccEmails ?? [],
+    phone: input.phone?.trim() || null,
+    address: input.address?.trim() || null,
+    payment_terms: input.paymentTerms ?? 'Net 30',
+    default_currency: input.defaultCurrency ?? 'NGN',
+    notes: input.notes?.trim() || null,
+    preferred_bank_account_id: input.preferredBankAccountId ?? null,
+  }
+  if (input.customerId !== undefined) {
+    updateData.customer_id = input.customerId.trim() || null
+  }
   const { error } = await supabase
     .from('clients')
-    .update({
-      client_name: input.clientName.trim(),
-      contact_person: input.contactPerson?.trim() || null,
-      email: input.email?.trim() || null,
-      cc_emails: input.ccEmails ?? [],
-      phone: input.phone?.trim() || null,
-      address: input.address?.trim() || null,
-      payment_terms: input.paymentTerms ?? 'Net 30',
-      default_currency: input.defaultCurrency ?? 'NGN',
-      notes: input.notes?.trim() || null,
-      preferred_bank_account_id: input.preferredBankAccountId ?? null,
-    })
+    .update(updateData)
     .eq('id', id)
     .eq('org_id', orgId)
 
