@@ -84,8 +84,8 @@ export default function ProformaHTMLPreview({
       <hr className="mx-8 mb-5" style={{ borderColor: pc, borderTopWidth: 3 }} />
 
       {/* ── Meta: LEFT stacked DATE/INVOICE#/CUSTOMER ID | RIGHT TO ── */}
-      <div className="px-8 pb-5 flex justify-between gap-6">
-        <div className="flex gap-7">
+      <div className="px-8 pb-6 flex justify-between gap-6">
+        <div className="flex-1 flex flex-col gap-[9px]">
           {(
             [
               ['DATE', issueDate || '—'],
@@ -94,18 +94,18 @@ export default function ProformaHTMLPreview({
             ] as [string, string][]
           ).map(([label, value]) => (
             <div key={label}>
-              <div className="font-bold text-[9px] uppercase mb-1" style={{ color: pc }}>
+              <div className="font-bold text-[9px] uppercase mb-0.5" style={{ color: pc }}>
                 {label}
               </div>
               <div className="font-bold text-gray-900 text-[11px]">{value}</div>
             </div>
           ))}
         </div>
-        <div className="text-right">
-          <div className="font-bold text-[9px] uppercase mb-1" style={{ color: pc }}>TO</div>
+        <div className="flex-1 text-right">
+          <div className="font-bold text-[9px] uppercase mb-0.5" style={{ color: pc }}>TO</div>
           <div className="font-bold text-gray-900 text-[11px]">{recipientName || '—'}</div>
           {recipientAddress && (
-            <div className="text-gray-500 mt-1 whitespace-pre-line max-w-[180px] text-right text-[10px]">
+            <div className="text-gray-500 mt-1 whitespace-pre-line max-w-[180px] ml-auto text-right text-[10px]">
               {recipientAddress}
             </div>
           )}
@@ -135,7 +135,7 @@ export default function ProformaHTMLPreview({
           </thead>
           <tbody>
             {lineItems.map((item, i) => (
-              <tr key={i} className="border-b border-gray-200" style={{ height: 26 }}>
+              <tr key={i} className="border-b border-gray-200" style={{ height: 22 }}>
                 <td className="py-1.5 px-2 text-gray-700">{item.qty > 0 ? item.qty : ''}</td>
                 <td className="py-1.5 px-2 text-gray-800">{item.description}</td>
                 <td className="py-1.5 px-2 text-right text-gray-800">
@@ -147,7 +147,7 @@ export default function ProformaHTMLPreview({
               </tr>
             ))}
             {/* VAT row */}
-            <tr className="border-b border-gray-200" style={{ height: 26 }}>
+            <tr className="border-b border-gray-200" style={{ height: 22 }}>
               <td className="py-1.5 px-2"></td>
               <td className="py-1.5 px-2 text-gray-800">Vat@ 7.5%</td>
               <td className="py-1.5 px-2"></td>
@@ -157,7 +157,7 @@ export default function ProformaHTMLPreview({
             </tr>
             {/* Empty rows */}
             {Array.from({ length: 5 }).map((_, i) => (
-              <tr key={`empty-${i}`} className="border-b border-gray-200" style={{ height: 26 }}>
+              <tr key={`empty-${i}`} className="border-b border-gray-200" style={{ height: 22 }}>
                 <td className="px-2"></td>
                 <td className="px-2"></td>
                 <td className="px-2"></td>

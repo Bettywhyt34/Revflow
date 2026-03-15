@@ -135,22 +135,22 @@ function buildStyles(primaryColor: string) {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
-      marginBottom: 16,
+      marginBottom: 24,
     },
     metaLeft: {
-      flexDirection: 'row',
-      gap: 28,
+      flex: 1,
+      flexDirection: 'column',
+      gap: 9,
     },
     metaItem: {
       flexDirection: 'column',
-      minWidth: 80,
     },
     metaLabel: {
       fontSize: 8,
       fontFamily: 'NotoSans',
       fontWeight: 700,
       color: primaryColor,
-      marginBottom: 4,
+      marginBottom: 3,
       textTransform: 'uppercase',
     },
     metaValue: {
@@ -160,6 +160,7 @@ function buildStyles(primaryColor: string) {
       color: '#1a1a1a',
     },
     metaRight: {
+      flex: 1,
       alignItems: 'flex-end',
     },
     toLabel: {
@@ -220,15 +221,15 @@ function buildStyles(primaryColor: string) {
       flexDirection: 'row',
       borderBottomWidth: 1,
       borderBottomColor: '#d1d5db',
-      paddingVertical: 6,
+      paddingVertical: 5,
       paddingHorizontal: 6,
-      minHeight: 26,
+      minHeight: 22,
     },
     emptyRow: {
       flexDirection: 'row',
       borderBottomWidth: 1,
       borderBottomColor: '#d1d5db',
-      height: 26,
+      height: 22,
       paddingHorizontal: 6,
     },
     // Column widths
@@ -237,14 +238,12 @@ function buildStyles(primaryColor: string) {
     colUnitPrice: { width: '23%', textAlign: 'right' },
     colTotal:     { width: '22%', textAlign: 'right' },
     cellText:     { fontSize: 9, color: '#1a1a1a' },
-    // ── Spacer ───────────────────────────────────────────────────────────────
-    spacer: { flexGrow: 1, minHeight: 12 },
     // ── Total ────────────────────────────────────────────────────────────────
     totalSection: {
       flexDirection: 'row',
       justifyContent: 'flex-end',
       alignItems: 'center',
-      marginTop: 14,
+      marginTop: 16,
       marginBottom: 16,
     },
     totalLabel: {
@@ -412,9 +411,6 @@ export default function ProformaInvoicePDF({ data }: { data: ProformaInvoiceData
             <Text style={[styles.cellText, styles.colTotal]}>{' '}</Text>
           </View>
         ))}
-
-        {/* ── Flexible spacer — pushes summary to bottom ── */}
-        <View style={styles.spacer} />
 
         {/* ── TOTAL ── */}
         <View style={styles.totalSection}>
