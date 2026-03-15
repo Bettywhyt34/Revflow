@@ -14,6 +14,14 @@ export interface DocumentRow {
   due_date: string | null
   sent_at: string | null
   created_at: string
+  file_path: string | null
+}
+
+export interface SavedLineItem {
+  qty: number
+  description: string
+  unit_price: number
+  line_total: number
 }
 
 export interface ProformaDocument extends DocumentRow {
@@ -24,6 +32,8 @@ export interface ProformaDocument extends DocumentRow {
   cc_emails: string[]
   bcc_emails: string[]
   subject: string | null
+  invoice_subject: string | null
+  line_items: SavedLineItem[]
   sent_by: string | null
   notes: string | null
   terms: string | null
@@ -63,7 +73,7 @@ export async function getDocumentsByCampaign(campaignId: string): Promise<Docume
   const { data } = await supabase
     .from('documents')
     .select(
-      'id, type, status, document_number, amount_before_vat, agency_fee_amount, vat_amount, total_amount, currency, issue_date, due_date, sent_at, created_at',
+      'id, type, status, document_number, amount_before_vat, agency_fee_amount, vat_amount, total_amount, currency, issue_date, due_date, sent_at, created_at, file_path',
     )
     .eq('campaign_id', campaignId)
     .order('created_at', { ascending: false })

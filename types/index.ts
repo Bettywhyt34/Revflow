@@ -115,5 +115,12 @@ export interface Client {
 
 export interface CampaignWithRelations extends Campaign {
   account_manager: { id: string; full_name: string } | null
-  client: { id: string; client_name: string; email: string | null; cc_emails: string[] } | null
+  client: {
+    id: string
+    client_name: string
+    email: string | null
+    cc_emails: string[]
+    address: string | null
+    client_code: string | null
+  } | null
 }

@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Mail, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Mail, CheckCircle, Download } from 'lucide-react'
 import { getDocumentById } from '@/lib/data/documents'
 import { getOrgBankAccounts } from '@/lib/data/settings'
 import { createAdminClient } from '@/lib/supabase'
@@ -271,7 +271,7 @@ export default async function ViewProformaPage({
 
       {/* Send button */}
       {canSend && (
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-3 flex-wrap">
           <Link
             href={`/campaigns/${id}`}
             className="inline-flex items-center justify-center min-h-[44px] px-5 py-2.5
@@ -280,6 +280,16 @@ export default async function ViewProformaPage({
           >
             Back to Campaign
           </Link>
+          <a
+            href={`/api/proforma/${docId}/pdf`}
+            download={`proforma-${doc.document_number}.pdf`}
+            className="inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5
+              rounded-lg text-sm font-medium border border-gray-200 text-gray-700
+              hover:bg-gray-50 transition"
+          >
+            <Download className="h-4 w-4" />
+            Download PDF
+          </a>
           <SendProformaButton
             docId={docId}
             campaignId={id}

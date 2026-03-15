@@ -71,6 +71,13 @@ function calcFinancials(
 
 // ── Create (save as draft) ──────────────────────────────────────────────────
 
+export interface ProformaLineItem {
+  qty: number
+  description: string
+  unit_price: number
+  line_total: number
+}
+
 export interface CreateProformaInput {
   campaignId: string
   recipientName: string
@@ -78,9 +85,8 @@ export interface CreateProformaInput {
   ccEmails: string[]
   recognitionStart: string   // YYYY-MM-DD
   recognitionEnd: string     // YYYY-MM-DD
-  amountBeforeVat: number
-  includeAgencyFee: boolean
-  agencyFeePct: number
+  lineItems: ProformaLineItem[]
+  invoiceSubject: string
   issueDateOverride?: string // YYYY-MM-DD, defaults to today
   paymentTermsDays: number   // e.g. 30
   notes: string
@@ -110,6 +116,11 @@ export async function createProformaAction(
     return { error: 'Campaign is not in plan_submitted status.' }
   }
 
+  // Derive totals from line items
+  const subtotal = input.lineItems.reduce((s, i) => s + i.line_total, 0)
+  const vatAmount = Math.round(subtotal * VAT_RATE * 100) / 100
+  const totalAmount = Math.round((subtotal + vatAmount) * 100) / 100
+
   const docNumber = await getNextDocumentNumber(orgId, 'proforma_invoice')
   const issueDate = input.issueDateOverride ?? new Date().toISOString().split('T')[0]
   const dueDate = new Date(
@@ -117,13 +128,6 @@ export async function createProformaAction(
   )
     .toISOString()
     .split('T')[0]
-  const validUntil = dueDate
-
-  const { agencyFeeAmount, vatAmount, totalAmount } = calcFinancials(
-    input.amountBeforeVat,
-    input.includeAgencyFee,
-    input.agencyFeePct,
-  )
 
   const { data: doc, error: insertErr } = await supabase
     .from('documents')
@@ -133,8 +137,8 @@ export async function createProformaAction(
       status: 'draft',
       document_number: docNumber,
       version: 1,
-      amount_before_vat: input.amountBeforeVat,
-      agency_fee_amount: agencyFeeAmount,
+      amount_before_vat: subtotal,
+      agency_fee_amount: 0,
       vat_amount: vatAmount,
       total_amount: totalAmount,
       currency: campaign.currency ?? 'NGN',
@@ -148,6 +152,8 @@ export async function createProformaAction(
       cc_emails: input.ccEmails ?? [],
       notes: input.notes || null,
       terms: `Payment due within ${input.paymentTermsDays} days of invoice date.`,
+      line_items: input.lineItems,
+      invoice_subject: input.invoiceSubject || null,
       created_by: session.user.id,
     })
     .select('id')
