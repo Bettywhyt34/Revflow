@@ -21,6 +21,10 @@ export interface ProformaDocument extends DocumentRow {
   recognition_period_end: string | null
   recipient_email: string | null
   recipient_name: string | null
+  cc_emails: string[]
+  bcc_emails: string[]
+  subject: string | null
+  sent_by: string | null
   notes: string | null
   terms: string | null
   created_by: string

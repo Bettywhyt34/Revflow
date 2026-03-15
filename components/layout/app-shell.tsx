@@ -10,6 +10,7 @@ import {
   Building2,
   BarChart3,
   Settings,
+  Users,
   LogOut,
   Menu,
   X,
@@ -23,7 +24,8 @@ const NAV_ITEMS = [
   { label: 'Campaigns', href: '/campaigns',   icon: Briefcase,       active: true,  adminOnly: false },
   { label: 'Clients',   href: '/clients',     icon: Building2,       active: true,  adminOnly: false },
   { label: 'Reports',   href: '/reports',     icon: BarChart3,       active: false, adminOnly: false },
-  { label: 'Users',     href: '/admin/users', icon: Settings,        active: true,  adminOnly: true  },
+  { label: 'Users',     href: '/admin/users', icon: Users,           active: true,  adminOnly: true  },
+  { label: 'Settings',  href: '/settings',    icon: Settings,        active: true,  adminOnly: false },
 ]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,10 +59,12 @@ function getBottomTabs(role: UserRole | null) {
 function SidebarContent({
   user,
   pathname,
+  primaryColor,
   onClose,
 }: {
   user: { name?: string | null; email?: string | null; role: UserRole | null }
   pathname: string
+  primaryColor: string
   onClose?: () => void
 }) {
   const router = useRouter()
@@ -77,7 +81,7 @@ function SidebarContent({
         <div className="flex items-center gap-2.5">
           <div
             className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-            style={{ background: '#0D9488' }}
+            style={{ background: primaryColor }}
           >
             R
           </div>
@@ -124,7 +128,7 @@ function SidebarContent({
                   ? 'text-white'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
-              style={isActive ? { background: '#0D9488' } : {}}
+              style={isActive ? { background: primaryColor } : {}}
             >
               <Icon className="h-4 w-4 flex-shrink-0" />
               {item.label}
@@ -139,7 +143,7 @@ function SidebarContent({
         <div className="flex items-center gap-3 px-3 py-2">
           <div
             className="h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-            style={{ background: '#0D9488' }}
+            style={{ background: primaryColor }}
           >
             {initials(user.name)}
           </div>
@@ -161,7 +165,15 @@ function SidebarContent({
 }
 
 // ── Mobile bottom nav ─────────────────────────────────────────────────────────
-function MobileBottomNav({ pathname, role }: { pathname: string; role: UserRole | null }) {
+function MobileBottomNav({
+  pathname,
+  role,
+  primaryColor,
+}: {
+  pathname: string
+  role: UserRole | null
+  primaryColor: string
+}) {
   const tabs = getBottomTabs(role)
   return (
     <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 flex safe-bottom">
@@ -173,7 +185,7 @@ function MobileBottomNav({ pathname, role }: { pathname: string; role: UserRole 
             key={item.href}
             href={item.href}
             className="flex-1 flex flex-col items-center justify-center gap-1 py-2 min-h-[56px] transition-colors"
-            style={isActive ? { color: '#0D9488' } : { color: '#9ca3af' }}
+            style={isActive ? { color: primaryColor } : { color: '#9ca3af' }}
           >
             <Icon className="h-5 w-5" />
             <span className="text-[10px] font-medium">{item.label}</span>
@@ -187,9 +199,11 @@ function MobileBottomNav({ pathname, role }: { pathname: string; role: UserRole 
 // ── Top bar ───────────────────────────────────────────────────────────────────
 function TopBar({
   user,
+  primaryColor,
   onMenuOpen,
 }: {
   user: { name?: string | null; role: UserRole | null }
+  primaryColor: string
   onMenuOpen: () => void
 }) {
   const pathname = usePathname()
@@ -210,6 +224,8 @@ function TopBar({
       ? 'Client'
       : pathname.startsWith('/clients')
       ? 'Clients'
+      : pathname.startsWith('/settings')
+      ? 'Settings'
       : 'Revflow'
 
   async function handleSignOut() {
@@ -228,7 +244,7 @@ function TopBar({
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <div
           className="h-6 w-6 rounded-md flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
-          style={{ background: '#0D9488' }}
+          style={{ background: primaryColor }}
         >
           R
         </div>
@@ -248,9 +264,11 @@ function TopBar({
 export default function AppShell({
   user,
   children,
+  primaryColor = '#0D9488',
 }: {
   user: { name?: string | null; email?: string | null; role: UserRole | null }
   children: React.ReactNode
+  primaryColor?: string
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
@@ -259,7 +277,7 @@ export default function AppShell({
     <div className="flex min-h-screen bg-gray-50 overflow-x-hidden">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:flex-shrink-0 bg-white border-r border-gray-100 sticky top-0 h-screen">
-        <SidebarContent user={user} pathname={pathname} />
+        <SidebarContent user={user} pathname={pathname} primaryColor={primaryColor} />
       </aside>
 
       {/* Mobile sidebar overlay */}
@@ -273,6 +291,7 @@ export default function AppShell({
             <SidebarContent
               user={user}
               pathname={pathname}
+              primaryColor={primaryColor}
               onClose={() => setSidebarOpen(false)}
             />
           </aside>
@@ -281,14 +300,14 @@ export default function AppShell({
 
       {/* Main content column */}
       <div className="flex-1 flex flex-col min-w-0">
-        <TopBar user={user} onMenuOpen={() => setSidebarOpen(true)} />
+        <TopBar user={user} primaryColor={primaryColor} onMenuOpen={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-x-hidden pb-20 lg:pb-0">
           {children}
         </main>
       </div>
 
       {/* Mobile bottom nav */}
-      <MobileBottomNav pathname={pathname} role={user.role} />
+      <MobileBottomNav pathname={pathname} role={user.role} primaryColor={primaryColor} />
     </div>
   )
 }

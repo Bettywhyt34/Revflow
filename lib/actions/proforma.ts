@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
 import { getNextDocumentNumber } from '@/lib/data/documents'
 import { buildProformaEmailHtml } from '@/lib/email/proforma-email'
+import type { SendDocumentParams } from '@/lib/actions/send-document'
 import { Resend } from 'resend'
 
 const VAT_RATE = 0.075
@@ -43,7 +44,7 @@ export interface CreateProformaInput {
 
 export async function createProformaAction(
   input: CreateProformaInput,
-): Promise<{ error?: string; docId?: string }> {
+): Promise<{ error?: string; docId?: string; docNumber?: string }> {
   const session = await auth()
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
@@ -114,7 +115,7 @@ export async function createProformaAction(
   }
 
   revalidatePath(`/campaigns/${input.campaignId}`)
-  return { docId: doc.id }
+  return { docId: doc.id, docNumber: docNumber }
 }
 
 // ── Send ────────────────────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ export async function createProformaAction(
 export async function sendProformaAction(
   docId: string,
   campaignId: string,
+  params: SendDocumentParams,
 ): Promise<{ error: string } | never> {
   const session = await auth()
   if (!session?.user?.id) return { error: 'Not authenticated.' }
@@ -158,7 +160,7 @@ export async function sendProformaAction(
   }
 
   if (campaign.org_id !== orgId) return { error: 'Document not found.' }
-  if (!doc.recipient_email) return { error: 'Recipient email is required.' }
+  if (!params.sentTo) return { error: 'Recipient email is required.' }
   if (!doc.recognition_period_start || !doc.recognition_period_end) {
     return { error: 'Recognition period is required before sending.' }
   }
@@ -168,7 +170,7 @@ export async function sendProformaAction(
     issueDate: doc.issue_date,
     validUntil: doc.due_date ?? doc.issue_date,
     dueDate: doc.due_date ?? doc.issue_date,
-    recipientName: doc.recipient_name ?? campaign.advertiser,
+    recipientName: params.recipientName || doc.recipient_name || campaign.advertiser,
     campaignTitle: campaign.title,
     trackerID: campaign.tracker_id,
     recognitionStart: doc.recognition_period_start,
@@ -181,18 +183,25 @@ export async function sendProformaAction(
     totalAmount: doc.total_amount ?? 0,
     currency: doc.currency ?? 'NGN',
     notes: doc.notes,
+    messageBody: params.messageBody || null,
   })
 
   // Send via Resend
   const resend = new Resend(process.env.RESEND_API_KEY)
-  const ccEmails: string[] = Array.isArray(doc.cc_emails) ? doc.cc_emails : []
+
+  const extraAttachments = (params.attachments ?? []).map((a) => ({
+    filename: a.name,
+    path: a.url,
+  }))
 
   const { error: emailErr } = await resend.emails.send({
     from: process.env.RESEND_FROM_EMAIL ?? 'notifications@revflowapp.com',
-    to: doc.recipient_email,
-    ...(ccEmails.length > 0 ? { cc: ccEmails } : {}),
-    subject: `Proforma Invoice ${doc.document_number} — ${campaign.title}`,
+    to: params.sentTo,
+    ...(params.ccEmails.length > 0 ? { cc: params.ccEmails } : {}),
+    ...(params.bccEmails.length > 0 ? { bcc: params.bccEmails } : {}),
+    subject: params.subject || `Proforma Invoice ${doc.document_number} — ${campaign.title}`,
     html,
+    ...(extraAttachments.length > 0 ? { attachments: extraAttachments } : {}),
   })
 
   if (emailErr) {
@@ -200,10 +209,19 @@ export async function sendProformaAction(
     return { error: 'Failed to send email. Check RESEND_API_KEY.' }
   }
 
-  // Mark document as sent
+  // Mark document as sent, update recipient fields and metadata
   await supabase
     .from('documents')
-    .update({ status: 'current', sent_at: new Date().toISOString() })
+    .update({
+      status: 'current',
+      sent_at: new Date().toISOString(),
+      recipient_email: params.sentTo,
+      recipient_name: params.recipientName,
+      cc_emails: params.ccEmails,
+      bcc_emails: params.bccEmails,
+      subject: params.subject,
+      sent_by: session.user.id,
+    })
     .eq('id', docId)
 
   // Advance campaign status
@@ -219,9 +237,76 @@ export async function sendProformaAction(
     campaign_id: campaign.id,
     type: 'approval_required',
     title: `Proforma ${doc.document_number} sent`,
-    message: `Proforma sent to ${doc.recipient_email}. Awaiting PO from client.`,
+    message: `Proforma sent to ${params.sentTo}. Awaiting PO from client.`,
   })
 
   revalidatePath(`/campaigns/${campaign.id}`)
   redirect(`/campaigns/${campaign.id}`)
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+
+export async function getProformaPreviewAction(
+  docId: string,
+  recipientName: string,
+  messageBody: string,
+): Promise<{ html?: string; error?: string }> {
+  const session = await auth()
+  if (!session?.user?.id) return { error: 'Not authenticated.' }
+
+  const { orgId } = session.user
+  const supabase = createAdminClient()
+
+  const { data: doc } = await supabase
+    .from('documents')
+    .select(
+      `*, campaign:campaign_id(
+        id, title, advertiser, tracker_id, campaign_type, agency_fee_pct,
+        currency, org_id, status
+      )`,
+    )
+    .eq('id', docId)
+    .maybeSingle()
+
+  if (!doc) return { error: 'Document not found.' }
+
+  const campaign = doc.campaign as {
+    id: string
+    title: string
+    advertiser: string
+    tracker_id: string
+    campaign_type: string
+    agency_fee_pct: number
+    currency: string
+    org_id: string
+    status: string
+  }
+
+  if (campaign.org_id !== orgId) return { error: 'Document not found.' }
+  if (!doc.recognition_period_start || !doc.recognition_period_end) {
+    return { error: 'Recognition period is required.' }
+  }
+
+  const html = buildProformaEmailHtml({
+    documentNumber: doc.document_number,
+    issueDate: doc.issue_date,
+    validUntil: doc.due_date ?? doc.issue_date,
+    dueDate: doc.due_date ?? doc.issue_date,
+    recipientName: recipientName || doc.recipient_name || campaign.advertiser,
+    campaignTitle: campaign.title,
+    trackerID: campaign.tracker_id,
+    recognitionStart: doc.recognition_period_start,
+    recognitionEnd: doc.recognition_period_end,
+    amountBeforeVat: doc.amount_before_vat ?? 0,
+    includeAgencyFee: (doc.agency_fee_amount ?? 0) > 0,
+    agencyFeePct: campaign.agency_fee_pct ?? 10,
+    agencyFeeAmount: doc.agency_fee_amount ?? 0,
+    vatAmount: doc.vat_amount ?? 0,
+    totalAmount: doc.total_amount ?? 0,
+    currency: doc.currency ?? 'NGN',
+    notes: doc.notes,
+    messageBody: messageBody || null,
+  })
+
+  return { html }
 }

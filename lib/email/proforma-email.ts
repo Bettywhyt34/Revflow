@@ -16,6 +16,7 @@ export interface ProformaEmailData {
   totalAmount: number
   currency: string
   notes?: string | null
+  messageBody?: string | null
 }
 
 function fmt(amount: number, currency: string): string {
@@ -49,6 +50,13 @@ function row(label: string, value: string, bold = false): string {
 export function buildProformaEmailHtml(d: ProformaEmailData): string {
   const agencyRow = d.includeAgencyFee
     ? row(`Agency Commission (${d.agencyFeePct}%)`, fmt(d.agencyFeeAmount, d.currency))
+    : ''
+
+  const messageBlock = d.messageBody
+    ? `<div style="margin-bottom:24px;padding:16px 20px;background:#F0FDFA;border-radius:8px;border:1px solid #99F6E4;">
+        <p style="margin:0;font-size:14px;color:#065F46;white-space:pre-wrap;line-height:1.6;">${d.messageBody}</p>
+       </div>
+       <hr style="border:none;border-top:1px solid #E5E7EB;margin-bottom:24px;" />`
     : ''
 
   const notesBlock = d.notes
@@ -95,6 +103,8 @@ export function buildProformaEmailHtml(d: ProformaEmailData): string {
       <!-- Body -->
       <tr>
         <td style="padding:32px 40px;">
+
+          ${messageBlock}
 
           <!-- Bill To + Recognition Period -->
           <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">

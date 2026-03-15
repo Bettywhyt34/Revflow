@@ -1,37 +1,40 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { Send } from 'lucide-react'
-import { sendProformaAction } from '@/lib/actions/proforma'
+import { sendProformaAction, getProformaPreviewAction } from '@/lib/actions/proforma'
+import SendDialog from '@/components/documents/send-dialog'
 
-export default function SendProformaButton({
+export default function SendDocumentButton({
   docId,
   campaignId,
   isSent,
+  documentNumber,
+  documentType,
+  campaignTitle,
+  clientName,
   recipientEmail,
+  recipientName,
+  ccEmails,
 }: {
   docId: string
   campaignId: string
   isSent: boolean
+  documentNumber: string
+  documentType: string
+  campaignTitle: string
+  clientName?: string | null
   recipientEmail: string | null
+  recipientName: string | null
+  ccEmails: string[]
 }) {
-  const [isPending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  function handleSend() {
-    setError(null)
-    startTransition(async () => {
-      const result = await sendProformaAction(docId, campaignId)
-      if (result?.error) setError(result.error)
-      // On success, server action redirects
-    })
-  }
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <>
       <button
-        onClick={handleSend}
-        disabled={isPending || !recipientEmail}
+        onClick={() => setDialogOpen(true)}
+        disabled={!recipientEmail}
         className="inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5
           rounded-lg text-sm font-semibold text-white transition
           disabled:opacity-50 disabled:cursor-not-allowed"
@@ -40,9 +43,29 @@ export default function SendProformaButton({
         onMouseLeave={(e) => (e.currentTarget.style.background = '#0D9488')}
       >
         <Send className="h-4 w-4" />
-        {isPending ? 'Sending…' : isSent ? 'Resend' : 'Send Now'}
+        {isSent ? 'Resend' : 'Send Now'}
       </button>
-      {error && <p className="text-xs text-red-500">{error}</p>}
-    </div>
+
+      <SendDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        docId={docId}
+        campaignId={campaignId}
+        documentType={documentType}
+        documentNumber={documentNumber}
+        campaignTitle={campaignTitle}
+        clientName={clientName}
+        defaultTo={recipientEmail ?? ''}
+        defaultCc={ccEmails}
+        defaultRecipientName={recipientName ?? ''}
+        onSend={async (p) => {
+          const r = await sendProformaAction(docId, campaignId, p)
+          return r ?? {}
+        }}
+        onGetPreview={async (rn, mb) => {
+          return await getProformaPreviewAction(docId, rn, mb)
+        }}
+      />
+    </>
   )
 }

@@ -242,7 +242,13 @@ export default async function ViewProformaPage({
             docId={docId}
             campaignId={id}
             isSent={isSent}
+            documentNumber={doc.document_number}
+            documentType={doc.type}
+            campaignTitle={campaign.title}
+            clientName={campaign.advertiser}
             recipientEmail={doc.recipient_email}
+            recipientName={doc.recipient_name}
+            ccEmails={Array.isArray(doc.cc_emails) ? doc.cc_emails : []}
           />
         </div>
       )}

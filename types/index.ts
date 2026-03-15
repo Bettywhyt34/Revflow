@@ -17,6 +17,29 @@ export interface User {
   org_id: string
   last_login: string | null
   created_at: string
+  email_notifications?: boolean
+}
+
+export interface OrgSettings {
+  id: string
+  org_id: string
+  org_name: string | null
+  logo_url: string | null
+  primary_color: string
+  secondary_color: string
+  default_currency: string
+  vat_number: string | null
+  rc_number: string | null
+  address: string | null
+  invoice_prefix: string
+  payment_terms: string
+  agency_fee_pct: number
+  bank_name: string | null
+  bank_account_name: string | null
+  bank_account_number: string | null
+  sort_code: string | null
+  created_at: string
+  updated_at: string
 }
 
 export type CampaignStatus =

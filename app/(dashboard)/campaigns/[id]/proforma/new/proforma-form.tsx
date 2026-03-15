@@ -3,8 +3,9 @@
 import { useState, useTransition, useMemo } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Send, Save, CheckCircle } from 'lucide-react'
-import { createProformaAction, sendProformaAction } from '@/lib/actions/proforma'
+import { createProformaAction, sendProformaAction, getProformaPreviewAction } from '@/lib/actions/proforma'
 import { EmailChips } from '@/components/clients/client-form'
+import SendDialog from '@/components/documents/send-dialog'
 
 const VAT_RATE = 0.075
 
@@ -264,9 +265,11 @@ export default function ProformaForm({
 
   const [isPending, startTransition] = useTransition()
   const [savedDocId, setSavedDocId] = useState<string | null>(null)
+  const [savedDocNumber, setSavedDocNumber] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [stage, setStage] = useState<'editing' | 'draft_saved' | 'sending'>('editing')
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   // Form fields
   const [recipientName, setRecipientName] = useState(
@@ -330,6 +333,7 @@ export default function ProformaForm({
         setSaveError(result.error)
       } else {
         setSavedDocId(result.docId!)
+        setSavedDocNumber(result.docNumber ?? null)
         setStage('draft_saved')
       }
     })
@@ -337,11 +341,12 @@ export default function ProformaForm({
 
   function handleSaveAndSend() {
     setSendError(null)
-    setStage('sending')
     startTransition(async () => {
       // If not yet saved as draft, save first
       let docId = savedDocId
+      let docNumber = savedDocNumber
       if (!docId) {
+        setStage('sending')
         const result = await createProformaAction({
           campaignId,
           recipientName,
@@ -362,19 +367,17 @@ export default function ProformaForm({
           return
         }
         docId = result.docId!
-      }
-
-      const result = await sendProformaAction(docId, campaignId)
-      if (result?.error) {
-        setSendError(result.error)
+        docNumber = result.docNumber ?? null
+        setSavedDocId(docId)
+        setSavedDocNumber(docNumber)
         setStage('draft_saved')
       }
-      // On success, sendProformaAction redirects — so nothing to do here
+      setDialogOpen(true)
     })
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       {/* Back + title */}
       <div className="flex items-center gap-3">
         <Link
@@ -645,6 +648,29 @@ export default function ProformaForm({
           />
         </div>
       </div>
+
+      {savedDocId && (
+        <SendDialog
+          open={dialogOpen}
+          onClose={() => { setDialogOpen(false); setStage('draft_saved') }}
+          docId={savedDocId}
+          campaignId={campaignId}
+          documentType="proforma_invoice"
+          documentNumber={savedDocNumber ?? 'PROF-???'}
+          campaignTitle={campaign.title}
+          clientName={clientName}
+          defaultTo={recipientEmail}
+          defaultCc={ccEmails}
+          defaultRecipientName={recipientName}
+          onSend={async (p) => {
+            const r = await sendProformaAction(savedDocId, campaignId, p)
+            return r ?? {}
+          }}
+          onGetPreview={async (rn, mb) => {
+            return await getProformaPreviewAction(savedDocId, rn, mb)
+          }}
+        />
+      )}
     </div>
   )
 }
