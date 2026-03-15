@@ -29,10 +29,7 @@ export default async function ClientsPage() {
           <Link
             href="/clients/new"
             className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2.5 rounded-lg
-              text-sm font-semibold text-white transition whitespace-nowrap"
-            style={{ background: '#0D9488' }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#0b857a')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = '#0D9488')}
+              text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 transition whitespace-nowrap"
           >
             <Plus className="h-4 w-4" />
             Add Client
