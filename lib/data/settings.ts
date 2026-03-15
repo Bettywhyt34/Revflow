@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase'
-import type { OrgSettings } from '@/types'
+import type { OrgSettings, OrgBankAccount } from '@/types'
 
 const DEFAULTS: Omit<OrgSettings, 'id' | 'org_id' | 'created_at' | 'updated_at'> = {
   org_name: null,
@@ -7,16 +7,12 @@ const DEFAULTS: Omit<OrgSettings, 'id' | 'org_id' | 'created_at' | 'updated_at'>
   primary_color: '#0D9488',
   secondary_color: '#065F59',
   default_currency: 'NGN',
-  vat_number: null,
+  tax_id: null,
   rc_number: null,
   address: null,
   invoice_prefix: 'INV',
   payment_terms: 'Net 30',
   agency_fee_pct: 10,
-  bank_name: null,
-  bank_account_name: null,
-  bank_account_number: null,
-  sort_code: null,
 }
 
 export async function getOrgSettings(orgId: string): Promise<OrgSettings | null> {
@@ -39,4 +35,36 @@ export async function getOrgSettingsWithDefaults(orgId: string): Promise<OrgSett
     updated_at: new Date().toISOString(),
     ...DEFAULTS,
   }
+}
+
+export async function getOrgBankAccounts(orgId: string): Promise<OrgBankAccount[]> {
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from('org_bank_accounts')
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: true })
+  return (data ?? []) as OrgBankAccount[]
+}
+
+export async function getDefaultBankAccount(orgId: string): Promise<OrgBankAccount | null> {
+  const supabase = createAdminClient()
+  // Try is_default=true first
+  const { data: def } = await supabase
+    .from('org_bank_accounts')
+    .select('*')
+    .eq('org_id', orgId)
+    .eq('is_default', true)
+    .maybeSingle()
+  if (def) return def as OrgBankAccount
+
+  // Fallback to first row
+  const { data: first } = await supabase
+    .from('org_bank_accounts')
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return first ? (first as OrgBankAccount) : null
 }

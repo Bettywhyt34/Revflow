@@ -14,6 +14,7 @@ export interface ClientInput {
   paymentTerms?: string
   defaultCurrency?: string
   notes?: string
+  preferredBankAccountId?: string | null
 }
 
 export async function createClientAction(
@@ -43,6 +44,7 @@ export async function createClientAction(
       payment_terms: input.paymentTerms ?? 'Net 30',
       default_currency: input.defaultCurrency ?? 'NGN',
       notes: input.notes?.trim() || null,
+      preferred_bank_account_id: input.preferredBankAccountId ?? null,
       created_by: session.user.id,
     })
     .select('id, client_name')
@@ -82,6 +84,7 @@ export async function updateClientAction(
       payment_terms: input.paymentTerms ?? 'Net 30',
       default_currency: input.defaultCurrency ?? 'NGN',
       notes: input.notes?.trim() || null,
+      preferred_bank_account_id: input.preferredBankAccountId ?? null,
     })
     .eq('id', id)
     .eq('org_id', orgId)

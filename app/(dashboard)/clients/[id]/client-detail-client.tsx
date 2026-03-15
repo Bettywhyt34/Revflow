@@ -3,17 +3,23 @@
 import { useState } from 'react'
 import { Pencil } from 'lucide-react'
 import ClientForm from '@/components/clients/client-form'
-import type { Client } from '@/types'
+import type { Client, OrgBankAccount } from '@/types'
 
 export default function ClientDetailClient({
   client,
   canEdit,
+  bankAccounts = [],
 }: {
   client: Client
   canEdit: boolean
+  bankAccounts?: OrgBankAccount[]
 }) {
   const [editing, setEditing] = useState(false)
   const [localClient, setLocalClient] = useState(client)
+
+  const assignedBank = bankAccounts.find(
+    (a) => a.id === localClient.preferred_bank_account_id,
+  )
 
   if (editing) {
     return (
@@ -21,6 +27,7 @@ export default function ClientDetailClient({
         <h2 className="text-sm font-semibold text-gray-900 mb-4">Edit Client</h2>
         <ClientForm
           client={localClient}
+          bankAccounts={bankAccounts}
           onSuccess={(_, name) => {
             setLocalClient((prev) => ({ ...prev, client_name: name }))
             setEditing(false)
@@ -54,6 +61,14 @@ export default function ClientDetailClient({
         <Row label="Phone" value={localClient.phone} />
         <Row label="Address" value={localClient.address} />
         <Row label="Payment Terms" value={localClient.payment_terms} />
+        <Row
+          label="Bank Account"
+          value={
+            assignedBank
+              ? `${assignedBank.label || assignedBank.bank_name} · ${assignedBank.currency}`
+              : undefined
+          }
+        />
 
         {localClient.cc_emails.length > 0 && (
           <div>

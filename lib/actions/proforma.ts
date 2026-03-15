@@ -6,10 +6,54 @@ import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
 import { getNextDocumentNumber } from '@/lib/data/documents'
 import { buildProformaEmailHtml } from '@/lib/email/proforma-email'
+import { getDefaultBankAccount } from '@/lib/data/settings'
 import type { SendDocumentParams } from '@/lib/actions/send-document'
+import type { OrgBankAccount } from '@/types'
 import { Resend } from 'resend'
 
 const VAT_RATE = 0.075
+
+async function resolveBankAccount(
+  bankAccountId: string | null | undefined,
+  clientId: string | null | undefined,
+  orgId: string,
+): Promise<OrgBankAccount | null> {
+  const supabase = createAdminClient()
+
+  // 1. Explicit override
+  if (bankAccountId) {
+    const { data } = await supabase
+      .from('org_bank_accounts')
+      .select('*')
+      .eq('id', bankAccountId)
+      .eq('org_id', orgId)
+      .maybeSingle()
+    if (data) return data as OrgBankAccount
+  }
+
+  // 2. Client preferred
+  if (clientId) {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('preferred_bank_account_id')
+      .eq('id', clientId)
+      .maybeSingle()
+    const prefId = (client as { preferred_bank_account_id?: string | null } | null)
+      ?.preferred_bank_account_id
+    if (prefId) {
+      const { data } = await supabase
+        .from('org_bank_accounts')
+        .select('*')
+        .eq('id', prefId)
+        .eq('org_id', orgId)
+        .maybeSingle()
+      if (data) return data as OrgBankAccount
+    }
+  }
+
+  // 3. Org default
+  return getDefaultBankAccount(orgId)
+}
 
 function calcFinancials(
   amountBeforeVat: number,
@@ -139,7 +183,7 @@ export async function sendProformaAction(
     .select(
       `*, campaign:campaign_id(
         id, title, advertiser, tracker_id, campaign_type, agency_fee_pct,
-        currency, org_id, status
+        currency, org_id, status, client_id
       )`,
     )
     .eq('id', docId)
@@ -157,6 +201,7 @@ export async function sendProformaAction(
     currency: string
     org_id: string
     status: string
+    client_id: string | null
   }
 
   if (campaign.org_id !== orgId) return { error: 'Document not found.' }
@@ -164,6 +209,8 @@ export async function sendProformaAction(
   if (!doc.recognition_period_start || !doc.recognition_period_end) {
     return { error: 'Recognition period is required before sending.' }
   }
+
+  const bankAccount = await resolveBankAccount(params.bankAccountId, campaign.client_id, orgId)
 
   const html = buildProformaEmailHtml({
     documentNumber: doc.document_number,
@@ -184,6 +231,10 @@ export async function sendProformaAction(
     currency: doc.currency ?? 'NGN',
     notes: doc.notes,
     messageBody: params.messageBody || null,
+    bankName: bankAccount?.bank_name ?? null,
+    accountName: bankAccount?.account_name ?? null,
+    accountNumber: bankAccount?.account_number ?? null,
+    bankCode: bankAccount?.bank_code ?? null,
   })
 
   // Send via Resend
@@ -250,6 +301,7 @@ export async function getProformaPreviewAction(
   docId: string,
   recipientName: string,
   messageBody: string,
+  bankAccountId?: string,
 ): Promise<{ html?: string; error?: string }> {
   const session = await auth()
   if (!session?.user?.id) return { error: 'Not authenticated.' }
@@ -262,7 +314,7 @@ export async function getProformaPreviewAction(
     .select(
       `*, campaign:campaign_id(
         id, title, advertiser, tracker_id, campaign_type, agency_fee_pct,
-        currency, org_id, status
+        currency, org_id, status, client_id
       )`,
     )
     .eq('id', docId)
@@ -280,12 +332,15 @@ export async function getProformaPreviewAction(
     currency: string
     org_id: string
     status: string
+    client_id: string | null
   }
 
   if (campaign.org_id !== orgId) return { error: 'Document not found.' }
   if (!doc.recognition_period_start || !doc.recognition_period_end) {
     return { error: 'Recognition period is required.' }
   }
+
+  const bankAccount = await resolveBankAccount(bankAccountId, campaign.client_id, orgId)
 
   const html = buildProformaEmailHtml({
     documentNumber: doc.document_number,
@@ -306,6 +361,10 @@ export async function getProformaPreviewAction(
     currency: doc.currency ?? 'NGN',
     notes: doc.notes,
     messageBody: messageBody || null,
+    bankName: bankAccount?.bank_name ?? null,
+    accountName: bankAccount?.account_name ?? null,
+    accountNumber: bankAccount?.account_number ?? null,
+    bankCode: bankAccount?.bank_code ?? null,
   })
 
   return { html }

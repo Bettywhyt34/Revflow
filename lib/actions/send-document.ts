@@ -6,4 +6,5 @@ export interface SendDocumentParams {
   subject: string
   messageBody: string
   attachments: { name: string; url: string }[]
+  bankAccountId?: string | null
 }

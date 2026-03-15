@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import type { UserRole } from '@/types'
+import { getOrgBankAccounts } from '@/lib/data/settings'
 import NewClientForm from './new-client-form'
 
 export const metadata = { title: 'New Client — Revflow' }
@@ -14,6 +15,8 @@ export default async function NewClientPage() {
   if (role !== 'admin' && role !== 'planner' && role !== 'finance_exec') {
     redirect('/clients')
   }
+
+  const bankAccounts = await getOrgBankAccounts(session!.user.orgId)
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-2xl mx-auto space-y-6">
@@ -31,7 +34,7 @@ export default async function NewClientPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <NewClientForm />
+        <NewClientForm bankAccounts={bankAccounts} />
       </div>
     </div>
   )

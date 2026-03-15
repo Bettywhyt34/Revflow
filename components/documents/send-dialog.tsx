@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useTransition } from 'react'
 import { X, Lock, Paperclip, Bold, Italic, List } from 'lucide-react'
 import { EmailChips } from '@/components/clients/client-form'
 import type { SendDocumentParams } from '@/lib/actions/send-document'
+import type { OrgBankAccount } from '@/types'
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   proforma_invoice: 'Proforma Invoice',
@@ -23,8 +24,10 @@ interface SendDialogProps {
   defaultTo: string
   defaultCc: string[]
   defaultRecipientName: string
+  bankAccounts?: OrgBankAccount[]
+  defaultBankAccountId?: string | null
   onSend: (params: SendDocumentParams) => Promise<{ error?: string }>
-  onGetPreview?: (recipientName: string, messageBody: string) => Promise<{ html?: string; error?: string }>
+  onGetPreview?: (recipientName: string, messageBody: string, bankAccountId?: string) => Promise<{ html?: string; error?: string }>
 }
 
 function buildDefaultBody(
@@ -48,6 +51,8 @@ export default function SendDialog({
   defaultTo,
   defaultCc,
   defaultRecipientName,
+  bankAccounts = [],
+  defaultBankAccountId,
   onSend,
   onGetPreview,
 }: SendDialogProps) {
@@ -60,6 +65,7 @@ export default function SendDialog({
     `${docTypeLabel} ${documentNumber} – ${clientName ?? ''} – ${campaignTitle}`,
   )
   const [recipientName, setRecipientName] = useState(defaultRecipientName)
+  const [bankAccountId, setBankAccountId] = useState(defaultBankAccountId ?? '')
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([])
   const [tab, setTab] = useState<'compose' | 'preview'>('compose')
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
@@ -83,6 +89,7 @@ export default function SendDialog({
       setBccEmails([])
       setSubject(`${docTypeLabel} ${documentNumber} – ${clientName ?? ''} – ${campaignTitle}`)
       setRecipientName(defaultRecipientName)
+      setBankAccountId(defaultBankAccountId ?? '')
       setAttachments([])
       setTab('compose')
       setPreviewHtml(null)
@@ -130,7 +137,7 @@ export default function SendDialog({
     }
     setPreviewError(null)
     setTab('preview')
-    const result = await onGetPreview(recipientName, getMessageBody())
+    const result = await onGetPreview(recipientName, getMessageBody(), bankAccountId || undefined)
     if (result.error) {
       setPreviewError(result.error)
     } else {
@@ -172,6 +179,7 @@ export default function SendDialog({
         subject,
         messageBody: getMessageBody(),
         attachments,
+        bankAccountId: bankAccountId || null,
       })
       if (result?.error) {
         setSendError(result.error)
@@ -284,6 +292,30 @@ export default function SendDialog({
                   className="w-full min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
                 />
               </div>
+
+              {/* Bank Account */}
+              {bankAccounts.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                    Payment Bank Account
+                  </label>
+                  <select
+                    value={bankAccountId}
+                    onChange={(e) => {
+                      setBankAccountId(e.target.value)
+                      setPreviewLoaded(false)
+                    }}
+                    className="w-full min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
+                  >
+                    <option value="">— Use default —</option>
+                    {bankAccounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label || a.bank_name} · {a.account_number.slice(-4)} · {a.currency}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Message body */}
               <div>

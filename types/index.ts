@@ -28,18 +28,27 @@ export interface OrgSettings {
   primary_color: string
   secondary_color: string
   default_currency: string
-  vat_number: string | null
+  tax_id: string | null
   rc_number: string | null
   address: string | null
   invoice_prefix: string
   payment_terms: string
   agency_fee_pct: number
-  bank_name: string | null
-  bank_account_name: string | null
-  bank_account_number: string | null
-  sort_code: string | null
   created_at: string
   updated_at: string
+}
+
+export interface OrgBankAccount {
+  id: string
+  org_id: string
+  bank_name: string
+  account_name: string
+  account_number: string
+  bank_code: string | null
+  currency: string
+  label: string | null
+  is_default: boolean
+  created_at: string
 }
 
 export type CampaignStatus =
@@ -98,6 +107,7 @@ export interface Client {
   payment_terms: string
   default_currency: string
   notes: string | null
+  preferred_bank_account_id: string | null
   created_by: string | null
   created_at: string
   updated_at: string

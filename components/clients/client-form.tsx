@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { X } from 'lucide-react'
 import { createClientAction, updateClientAction } from '@/lib/actions/clients'
-import type { Client } from '@/types'
+import type { Client, OrgBankAccount } from '@/types'
 
 const inputCls =
   'w-full min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 ' +
@@ -101,11 +101,13 @@ export default function ClientForm({
   onSuccess,
   onCancel,
   compact = false,
+  bankAccounts = [],
 }: {
   client?: Client | null
   onSuccess?: (id: string, name: string) => void
   onCancel?: () => void
   compact?: boolean  // inline mini-form mode
+  bankAccounts?: OrgBankAccount[]
 }) {
   const isEditing = !!client
   const [isPending, startTransition] = useTransition()
@@ -119,6 +121,9 @@ export default function ClientForm({
   const [address, setAddress] = useState(client?.address ?? '')
   const [paymentTerms, setPaymentTerms] = useState(client?.payment_terms ?? 'Net 30')
   const [notes, setNotes] = useState(client?.notes ?? '')
+  const [preferredBankAccountId, setPreferredBankAccountId] = useState(
+    client?.preferred_bank_account_id ?? '',
+  )
 
   function handleSubmit() {
     setError(null)
@@ -134,6 +139,7 @@ export default function ClientForm({
         address,
         paymentTerms,
         notes,
+        preferredBankAccountId: preferredBankAccountId || null,
       }
 
       if (isEditing) {
@@ -249,6 +255,28 @@ export default function ClientForm({
               </select>
             </div>
           </div>
+
+          {bankAccounts.length > 0 && (
+            <div>
+              <Label>Assigned Bank Account</Label>
+              <select
+                value={preferredBankAccountId}
+                onChange={(e) => setPreferredBankAccountId(e.target.value)}
+                className={inputCls}
+                style={{ '--tw-ring-color': '#0D9488' } as React.CSSProperties}
+              >
+                <option value="">— None (use org default) —</option>
+                {bankAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label || a.bank_name} · {a.currency}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Proforma and invoice emails will use this account&apos;s payment details.
+              </p>
+            </div>
+          )}
 
           <div>
             <Label>Notes</Label>

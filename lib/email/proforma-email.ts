@@ -17,6 +17,10 @@ export interface ProformaEmailData {
   currency: string
   notes?: string | null
   messageBody?: string | null
+  bankName?: string | null
+  accountName?: string | null
+  accountNumber?: string | null
+  bankCode?: string | null
 }
 
 function fmt(amount: number, currency: string): string {
@@ -168,10 +172,15 @@ export function buildProformaEmailHtml(d: ProformaEmailData): string {
           <!-- Bank details -->
           <div style="margin-top:28px;padding:16px 20px;background:#F9FAFB;border-radius:8px;">
             <div style="font-size:10px;font-weight:700;color:#9CA3AF;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">PAYMENT DETAILS</div>
-            <table cellpadding="0" cellspacing="0" style="font-size:13px;color:#374151;">
-              <tr><td style="padding:2px 0;color:#9CA3AF;width:120px;">Bank</td><td style="padding:2px 0;font-weight:600;">To be provided by accounts</td></tr>
-              <tr><td style="padding:2px 0;color:#9CA3AF;">Account Name</td><td style="padding:2px 0;font-weight:600;">QVT Media Limited</td></tr>
-            </table>
+            ${d.bankName
+              ? `<table cellpadding="0" cellspacing="0" style="font-size:13px;color:#374151;">
+              <tr><td style="padding:2px 0;color:#9CA3AF;width:140px;">Bank</td><td style="padding:2px 0;font-weight:600;">${d.bankName}</td></tr>
+              <tr><td style="padding:2px 0;color:#9CA3AF;">Account Name</td><td style="padding:2px 0;font-weight:600;">${d.accountName ?? ''}</td></tr>
+              <tr><td style="padding:2px 0;color:#9CA3AF;">Account Number</td><td style="padding:2px 0;font-weight:600;">${d.accountNumber ?? ''}</td></tr>
+              ${d.bankCode ? `<tr><td style="padding:2px 0;color:#9CA3AF;">Sort Code</td><td style="padding:2px 0;font-weight:600;">${d.bankCode}</td></tr>` : ''}
+            </table>`
+              : `<p style="margin:0;font-size:13px;color:#6B7280;">Contact billing@revflowapp.com for payment details.</p>`
+            }
           </div>
 
           <!-- Footer note -->

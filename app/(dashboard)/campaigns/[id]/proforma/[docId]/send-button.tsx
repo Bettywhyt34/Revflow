@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Send } from 'lucide-react'
 import { sendProformaAction, getProformaPreviewAction } from '@/lib/actions/proforma'
 import SendDialog from '@/components/documents/send-dialog'
+import type { OrgBankAccount } from '@/types'
 
 export default function SendDocumentButton({
   docId,
@@ -16,6 +17,8 @@ export default function SendDocumentButton({
   recipientEmail,
   recipientName,
   ccEmails,
+  bankAccounts = [],
+  clientPreferredBankAccountId,
 }: {
   docId: string
   campaignId: string
@@ -27,6 +30,8 @@ export default function SendDocumentButton({
   recipientEmail: string | null
   recipientName: string | null
   ccEmails: string[]
+  bankAccounts?: OrgBankAccount[]
+  clientPreferredBankAccountId?: string | null
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -58,12 +63,14 @@ export default function SendDocumentButton({
         defaultTo={recipientEmail ?? ''}
         defaultCc={ccEmails}
         defaultRecipientName={recipientName ?? ''}
+        bankAccounts={bankAccounts}
+        defaultBankAccountId={clientPreferredBankAccountId}
         onSend={async (p) => {
           const r = await sendProformaAction(docId, campaignId, p)
           return r ?? {}
         }}
-        onGetPreview={async (rn, mb) => {
-          return await getProformaPreviewAction(docId, rn, mb)
+        onGetPreview={async (rn, mb, bankAccountId) => {
+          return await getProformaPreviewAction(docId, rn, mb, bankAccountId)
         }}
       />
     </>

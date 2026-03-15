@@ -41,6 +41,7 @@ export interface ProformaDocument extends DocumentRow {
     start_date: string | null
     end_date: string | null
     org_id: string
+    client_id: string | null
   }
 }
 
@@ -80,7 +81,7 @@ export async function getDocumentById(
       `*, campaign:campaign_id(
         id, title, advertiser, agency_name, campaign_type,
         agency_fee_pct, currency, tracker_id, planned_contract_value,
-        start_date, end_date, org_id
+        start_date, end_date, org_id, client_id
       )`,
     )
     .eq('id', id)

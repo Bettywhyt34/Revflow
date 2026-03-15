@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase'
-import { getOrgSettingsWithDefaults } from '@/lib/data/settings'
+import { getOrgSettingsWithDefaults, getOrgBankAccounts } from '@/lib/data/settings'
 import SettingsClient from './settings-client'
 import type { UserRole } from '@/types'
 
@@ -15,13 +15,14 @@ export default async function SettingsPage() {
   const orgId = session.user.orgId
   const supabase = createAdminClient()
 
-  const [orgSettings, userRow] = await Promise.all([
+  const [orgSettings, userRow, bankAccounts] = await Promise.all([
     getOrgSettingsWithDefaults(orgId),
     supabase
       .from('users')
       .select('email_notifications')
       .eq('id', session.user.id)
       .maybeSingle(),
+    getOrgBankAccounts(orgId),
   ])
 
   const emailNotifications = (userRow.data as { email_notifications: boolean } | null)
@@ -32,6 +33,7 @@ export default async function SettingsPage() {
       orgSettings={orgSettings}
       emailNotifications={emailNotifications}
       role={session.user.role as UserRole}
+      bankAccounts={bankAccounts}
     />
   )
 }

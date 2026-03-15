@@ -1,9 +1,11 @@
 import { auth } from '@/lib/auth'
-import { redirect, notFound } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Send, Mail, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Mail, CheckCircle } from 'lucide-react'
 import { getDocumentById } from '@/lib/data/documents'
-import type { UserRole } from '@/types'
+import { getOrgBankAccounts } from '@/lib/data/settings'
+import { createAdminClient } from '@/lib/supabase'
+import type { UserRole, OrgBankAccount } from '@/types'
 import SendProformaButton from './send-button'
 
 function fmt(amount: number | null, currency = 'NGN'): string {
@@ -41,6 +43,7 @@ export async function generateMetadata({
   params: Promise<{ id: string; docId: string }>
 }) {
   const { docId } = await params
+  void docId
   return { title: `Proforma — Revflow` }
 }
 
@@ -62,6 +65,31 @@ export default async function ViewProformaPage({
   const isSent = !!doc.sent_at
   const canSend = role === 'admin' || role === 'planner'
   const showAgencyFee = (doc.agency_fee_amount ?? 0) > 0
+
+  // Fetch bank accounts and resolve display account
+  const [bankAccounts, clientRow] = await Promise.all([
+    getOrgBankAccounts(orgId),
+    campaign.client_id
+      ? createAdminClient()
+          .from('clients')
+          .select('preferred_bank_account_id')
+          .eq('id', campaign.client_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+
+  const clientPreferredBankAccountId =
+    (clientRow.data as { preferred_bank_account_id?: string | null } | null)
+      ?.preferred_bank_account_id ?? null
+
+  // Resolve display bank account: client preferred → org default
+  let displayBankAccount: OrgBankAccount | null = null
+  if (clientPreferredBankAccountId) {
+    displayBankAccount = bankAccounts.find((a) => a.id === clientPreferredBankAccountId) ?? null
+  }
+  if (!displayBankAccount) {
+    displayBankAccount = bankAccounts.find((a) => a.is_default) ?? bankAccounts[0] ?? null
+  }
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-6">
@@ -212,12 +240,26 @@ export default async function ViewProformaPage({
           {/* Bank details */}
           <div className="bg-gray-50 rounded-xl px-5 py-4">
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Payment Details</div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-              <dt className="text-gray-400">Bank</dt>
-              <dd className="font-medium text-gray-700">To be provided by accounts</dd>
-              <dt className="text-gray-400">Account Name</dt>
-              <dd className="font-medium text-gray-700">QVT Media Limited</dd>
-            </dl>
+            {displayBankAccount ? (
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                <dt className="text-gray-400">Bank</dt>
+                <dd className="font-medium text-gray-700">{displayBankAccount.bank_name}</dd>
+                <dt className="text-gray-400">Account Name</dt>
+                <dd className="font-medium text-gray-700">{displayBankAccount.account_name}</dd>
+                <dt className="text-gray-400">Account Number</dt>
+                <dd className="font-medium text-gray-700">{displayBankAccount.account_number}</dd>
+                {displayBankAccount.bank_code && (
+                  <>
+                    <dt className="text-gray-400">Sort Code</dt>
+                    <dd className="font-medium text-gray-700">{displayBankAccount.bank_code}</dd>
+                  </>
+                )}
+              </dl>
+            ) : (
+              <p className="text-sm text-gray-400 italic">
+                Not configured — add bank accounts in Settings → Documents.
+              </p>
+            )}
           </div>
 
           <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
@@ -249,6 +291,8 @@ export default async function ViewProformaPage({
             recipientEmail={doc.recipient_email}
             recipientName={doc.recipient_name}
             ccEmails={Array.isArray(doc.cc_emails) ? doc.cc_emails : []}
+            bankAccounts={bankAccounts}
+            clientPreferredBankAccountId={clientPreferredBankAccountId}
           />
         </div>
       )}

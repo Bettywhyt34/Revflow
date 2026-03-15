@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { getClientById, getClientCampaigns } from '@/lib/data/clients'
+import { getOrgBankAccounts } from '@/lib/data/settings'
 import type { UserRole } from '@/types'
 import ClientDetailClient from './client-detail-client'
 
@@ -29,9 +30,10 @@ export default async function ClientDetailPage({
   const orgId = session!.user.orgId
   const role = session!.user.role as UserRole
 
-  const [client, { campaigns, totalBilled, totalCollected }] = await Promise.all([
+  const [client, { campaigns, totalBilled, totalCollected }, bankAccounts] = await Promise.all([
     getClientById(id, orgId),
     getClientCampaigns(id, orgId),
+    getOrgBankAccounts(orgId),
   ])
 
   if (!client) notFound()
@@ -70,7 +72,7 @@ export default async function ClientDetailPage({
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Edit form */}
         <div className="lg:col-span-2">
-          <ClientDetailClient client={client} canEdit={canEdit} />
+          <ClientDetailClient client={client} canEdit={canEdit} bankAccounts={bankAccounts} />
         </div>
 
         {/* Campaigns list */}

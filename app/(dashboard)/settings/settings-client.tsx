@@ -1,13 +1,18 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
-import { Lock, Upload, Building2, FileText, Bell, Palette } from 'lucide-react'
+import { Lock, Upload, Building2, FileText, Bell, Palette, Star, Pencil, Trash2, Plus } from 'lucide-react'
 import {
   saveOrgProfileAction,
   saveDocSettingsAction,
   saveNotificationPrefsAction,
+  createBankAccountAction,
+  updateBankAccountAction,
+  deleteBankAccountAction,
+  setDefaultBankAccountAction,
+  type BankAccountInput,
 } from '@/lib/actions/settings'
-import type { OrgSettings, UserRole } from '@/types'
+import type { OrgSettings, OrgBankAccount, UserRole } from '@/types'
 
 // ── Color Picker ──────────────────────────────────────────────────────────────
 function ColorPicker({
@@ -150,6 +155,249 @@ function Field({
 const inputCls =
   'w-full min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500'
 
+// ── Bank Account Form ─────────────────────────────────────────────────────────
+const EMPTY_BANK_FORM: BankAccountInput = {
+  bank_name: '',
+  account_name: '',
+  account_number: '',
+  bank_code: '',
+  currency: 'NGN',
+  label: '',
+}
+
+function BankAccountForm({
+  initial,
+  onSave,
+  onCancel,
+}: {
+  initial?: BankAccountInput
+  onSave: (input: BankAccountInput) => Promise<void>
+  onCancel: () => void
+}) {
+  const [form, setForm] = useState<BankAccountInput>(initial ?? EMPTY_BANK_FORM)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function set(field: keyof BankAccountInput, value: string) {
+    setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
+  async function handleSave() {
+    setError(null)
+    if (!form.bank_name.trim()) { setError('Bank name is required.'); return }
+    if (!form.account_name.trim()) { setError('Account name is required.'); return }
+    if (!form.account_number.trim()) { setError('Account number is required.'); return }
+    setSaving(true)
+    try {
+      await onSave(form)
+    } catch {
+      setError('Failed to save.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-gray-50">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Bank Name *</label>
+          <input value={form.bank_name} onChange={(e) => set('bank_name', e.target.value)}
+            className={inputCls} placeholder="e.g. Zenith Bank" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Account Name *</label>
+          <input value={form.account_name} onChange={(e) => set('account_name', e.target.value)}
+            className={inputCls} placeholder="e.g. QVT Media Limited" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Account Number *</label>
+          <input value={form.account_number} onChange={(e) => set('account_number', e.target.value)}
+            className={inputCls} placeholder="e.g. 1234567890" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Sort Code / Bank Code</label>
+          <input value={form.bank_code ?? ''} onChange={(e) => set('bank_code', e.target.value)}
+            className={inputCls} placeholder="e.g. 01-01-01" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Currency</label>
+          <select value={form.currency ?? 'NGN'} onChange={(e) => set('currency', e.target.value)}
+            className={inputCls}>
+            {['NGN', 'USD', 'GBP', 'EUR'].map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Label (optional)</label>
+          <input value={form.label ?? ''} onChange={(e) => set('label', e.target.value)}
+            className={inputCls} placeholder="e.g. USD Domiciliary" />
+        </div>
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {error}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 transition disabled:opacity-60"
+        >
+          {saving ? 'Saving…' : 'Save Account'}
+        </button>
+        <button
+          onClick={onCancel}
+          className="min-h-[44px] px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Bank Accounts Manager ─────────────────────────────────────────────────────
+function BankAccountsManager({
+  bankAccounts: initial,
+}: {
+  bankAccounts: OrgBankAccount[]
+}) {
+  const [accounts, setAccounts] = useState(initial)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  async function handleAdd(input: BankAccountInput) {
+    const result = await createBankAccountAction(input)
+    if (result.error) throw new Error(result.error)
+    if (result.account) setAccounts((prev) => [...prev, result.account!])
+    setShowAddForm(false)
+  }
+
+  async function handleEdit(id: string, input: BankAccountInput) {
+    const result = await updateBankAccountAction(id, input)
+    if (result.error) throw new Error(result.error)
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, ...input } : a)),
+    )
+    setEditingId(null)
+  }
+
+  async function handleDelete(id: string) {
+    if (!window.confirm('Delete this bank account? This cannot be undone.')) return
+    const result = await deleteBankAccountAction(id)
+    if (result.error) { alert(result.error); return }
+    const deleted = accounts.find((a) => a.id === id)
+    const remaining = accounts.filter((a) => a.id !== id)
+    // If deleted was default, promote first remaining
+    if (deleted?.is_default && remaining.length > 0) {
+      remaining[0] = { ...remaining[0], is_default: true }
+    }
+    setAccounts(remaining)
+  }
+
+  async function handleSetDefault(id: string) {
+    const result = await setDefaultBankAccountAction(id)
+    if (result.error) { alert(result.error); return }
+    setAccounts((prev) =>
+      prev.map((a) => ({ ...a, is_default: a.id === id })),
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {accounts.length === 0 && !showAddForm && (
+        <p className="text-sm text-gray-400 py-4 text-center border border-dashed border-gray-200 rounded-xl">
+          No bank accounts configured yet.
+        </p>
+      )}
+
+      {accounts.map((account) =>
+        editingId === account.id ? (
+          <BankAccountForm
+            key={account.id}
+            initial={{
+              bank_name: account.bank_name,
+              account_name: account.account_name,
+              account_number: account.account_number,
+              bank_code: account.bank_code ?? '',
+              currency: account.currency,
+              label: account.label ?? '',
+            }}
+            onSave={(input) => handleEdit(account.id, input)}
+            onCancel={() => setEditingId(null)}
+          />
+        ) : (
+          <div
+            key={account.id}
+            className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-gray-200 bg-white"
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-900 truncate">
+                  {account.label || account.bank_name}
+                </span>
+                <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">
+                  {account.currency}
+                </span>
+                {account.is_default && (
+                  <span className="text-xs bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded">
+                    Default
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5 truncate">
+                {account.account_name} · ···{account.account_number.slice(-4)}
+              </p>
+            </div>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {!account.is_default && (
+                <button
+                  onClick={() => handleSetDefault(account.id)}
+                  title="Set as default"
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-amber-500 hover:bg-amber-50 transition"
+                >
+                  <Star className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                onClick={() => setEditingId(account.id)}
+                title="Edit"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => handleDelete(account.id)}
+                title="Delete"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        ),
+      )}
+
+      {showAddForm ? (
+        <BankAccountForm onSave={handleAdd} onCancel={() => setShowAddForm(false)} />
+      ) : (
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-xl border border-dashed border-teal-300 text-sm font-medium text-teal-700 hover:bg-teal-50 transition w-full justify-center"
+        >
+          <Plus className="h-4 w-4" />
+          Add bank account
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ── Org Profile Tab ───────────────────────────────────────────────────────────
 function OrgProfileTab({
   s,
@@ -162,7 +410,7 @@ function OrgProfileTab({
   const [primary, setPrimary] = useState(s.primary_color)
   const [secondary, setSecondary] = useState(s.secondary_color)
   const [currency, setCurrency] = useState(s.default_currency)
-  const [vatNumber, setVatNumber] = useState(s.vat_number ?? '')
+  const [taxId, setTaxId] = useState(s.tax_id ?? '')
   const [rcNumber, setRcNumber] = useState(s.rc_number ?? '')
   const [address, setAddress] = useState(s.address ?? '')
   const [logoUrl, setLogoUrl] = useState(s.logo_url ?? '')
@@ -228,8 +476,8 @@ function OrgProfileTab({
           </select>
         </Field>
 
-        <Field label="VAT number">
-          <input value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} className={inputCls} />
+        <Field label="Tax ID">
+          <input value={taxId} onChange={(e) => setTaxId(e.target.value)} className={inputCls} />
         </Field>
 
         <Field label="RC number">
@@ -255,7 +503,7 @@ function OrgProfileTab({
                   primary_color: primary,
                   secondary_color: secondary,
                   default_currency: currency,
-                  vat_number: vatNumber,
+                  tax_id: taxId,
                   rc_number: rcNumber,
                   address,
                 }),
@@ -274,14 +522,18 @@ function OrgProfileTab({
 }
 
 // ── Document Settings Tab ─────────────────────────────────────────────────────
-function DocSettingsTab({ s, role }: { s: OrgSettings; role: UserRole }) {
+function DocSettingsTab({
+  s,
+  role,
+  bankAccounts,
+}: {
+  s: OrgSettings
+  role: UserRole
+  bankAccounts: OrgBankAccount[]
+}) {
   const [prefix, setPrefix] = useState(s.invoice_prefix)
   const [paymentTerms, setPaymentTerms] = useState(s.payment_terms)
   const [agencyFee, setAgencyFee] = useState(String(s.agency_fee_pct))
-  const [bankName, setBankName] = useState(s.bank_name ?? '')
-  const [bankAccountName, setBankAccountName] = useState(s.bank_account_name ?? '')
-  const [bankAccountNumber, setBankAccountNumber] = useState(s.bank_account_number ?? '')
-  const [sortCode, setSortCode] = useState(s.sort_code ?? '')
   const { run, banner, saving } = useSaveBanner()
 
   const year = new Date().getFullYear()
@@ -329,22 +581,6 @@ function DocSettingsTab({ s, role }: { s: OrgSettings; role: UserRole }) {
           />
         </Field>
 
-        <div className="space-y-4 pt-2">
-          <p className="text-sm font-semibold text-gray-700">Bank details</p>
-          <Field label="Bank name">
-            <input value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputCls} />
-          </Field>
-          <Field label="Account name">
-            <input value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} className={inputCls} />
-          </Field>
-          <Field label="Account number">
-            <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className={inputCls} />
-          </Field>
-          <Field label="Sort code">
-            <input value={sortCode} onChange={(e) => setSortCode(e.target.value)} className={inputCls} />
-          </Field>
-        </div>
-
         <div className="flex items-center gap-4 pt-2">
           <button
             disabled={saving}
@@ -354,10 +590,6 @@ function DocSettingsTab({ s, role }: { s: OrgSettings; role: UserRole }) {
                   invoice_prefix: prefix,
                   payment_terms: paymentTerms,
                   agency_fee_pct: Number(agencyFee),
-                  bank_name: bankName,
-                  bank_account_name: bankAccountName,
-                  bank_account_number: bankAccountNumber,
-                  sort_code: sortCode,
                 }),
               )
             }
@@ -366,6 +598,16 @@ function DocSettingsTab({ s, role }: { s: OrgSettings; role: UserRole }) {
             {saving ? 'Saving…' : 'Save changes'}
           </button>
           {banner}
+        </div>
+
+        {/* Bank Accounts section */}
+        <div className="pt-2 border-t border-gray-100 space-y-3">
+          <p className="text-sm font-semibold text-gray-700">Bank Accounts</p>
+          <p className="text-xs text-gray-400">
+            These will be used as payment details on proforma and invoice emails.
+            Mark one as default to use it when no client preference is set.
+          </p>
+          <BankAccountsManager bankAccounts={bankAccounts} />
         </div>
       </div>
     </AdminGate>
@@ -464,7 +706,7 @@ function AppearanceTab({ s, role }: { s: OrgSettings; role: UserRole }) {
                   primary_color: primary,
                   secondary_color: secondary,
                   default_currency: s.default_currency,
-                  vat_number: s.vat_number ?? '',
+                  tax_id: s.tax_id ?? '',
                   rc_number: s.rc_number ?? '',
                   address: s.address ?? '',
                 }),
@@ -496,10 +738,12 @@ export default function SettingsClient({
   orgSettings,
   emailNotifications,
   role,
+  bankAccounts,
 }: {
   orgSettings: OrgSettings
   emailNotifications: boolean
   role: UserRole
+  bankAccounts: OrgBankAccount[]
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('org-profile')
 
@@ -534,7 +778,9 @@ export default function SettingsClient({
       {/* Tab content */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         {activeTab === 'org-profile' && <OrgProfileTab s={orgSettings} role={role} />}
-        {activeTab === 'doc-settings' && <DocSettingsTab s={orgSettings} role={role} />}
+        {activeTab === 'doc-settings' && (
+          <DocSettingsTab s={orgSettings} role={role} bankAccounts={bankAccounts} />
+        )}
         {activeTab === 'notifications' && (
           <NotificationsTab emailNotifications={emailNotifications} role={role} />
         )}
