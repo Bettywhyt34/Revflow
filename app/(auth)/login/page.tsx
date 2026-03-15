@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const registered = searchParams.get('registered') === '1'
@@ -42,7 +42,6 @@ export default function LoginPage() {
   return (
     <Card className="w-full max-w-md shadow-sm">
       <CardHeader className="text-center pb-4">
-        {/* Wordmark */}
         <div className="flex items-center justify-center gap-2 mb-2">
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
             <span className="text-primary-foreground font-bold text-sm">R</span>
@@ -120,5 +119,13 @@ export default function LoginPage() {
         </p>
       </CardContent>
     </Card>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }
