@@ -6,6 +6,7 @@ import {
   getCampaignPaymentsTotal,
   getCampaignNotifications,
 } from '@/lib/data/campaigns'
+import { getDocumentsByCampaign } from '@/lib/data/documents'
 import StatusBadge from '@/components/campaigns/status-badge'
 import NextActionBadge from '@/components/campaigns/next-action-badge'
 import { ArrowLeft, Calendar, User, FileText, Bell } from 'lucide-react'
@@ -80,10 +81,11 @@ export default async function CampaignDetailPage({
   const orgId = session!.user.orgId
   const userRole = session!.user.role as UserRole
 
-  const [campaign, totalPaid, notifications] = await Promise.all([
+  const [campaign, totalPaid, notifications, documents] = await Promise.all([
     getCampaignById(id, orgId),
     getCampaignPaymentsTotal(id),
     getCampaignNotifications(id),
+    getDocumentsByCampaign(id),
   ])
 
   if (!campaign) notFound()
@@ -183,19 +185,75 @@ export default async function CampaignDetailPage({
 
       {/* Lower grid — documents + activity */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Document bundle (Step 10) */}
+        {/* Document bundle */}
         <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <FileText className="h-4 w-4 text-gray-400" />
             Document Bundle
           </h2>
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="h-10 w-10 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center mb-3">
-              <FileText className="h-5 w-5 text-gray-300" />
+          {documents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <div className="h-10 w-10 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center mb-3">
+                <FileText className="h-5 w-5 text-gray-300" />
+              </div>
+              <p className="text-sm text-gray-400">No documents yet</p>
+              {status === 'plan_submitted' && (
+                <Link
+                  href={`/campaigns/${id}/proforma/new`}
+                  className="mt-3 text-xs font-medium hover:underline"
+                  style={{ color: '#0D9488' }}
+                >
+                  + Create Proforma
+                </Link>
+              )}
             </div>
-            <p className="text-sm text-gray-400">No documents yet</p>
-            <p className="text-xs text-gray-300 mt-1">Documents are added in Steps 5–9</p>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              {documents.map((doc) => {
+                const typeLabel: Record<string, string> = {
+                  proforma_invoice: 'Proforma Invoice',
+                  invoice: 'Invoice',
+                  purchase_order: 'Purchase Order',
+                  receipt: 'Receipt',
+                  compliance: 'Compliance',
+                }
+                const isSent = !!doc.sent_at
+                return (
+                  <Link
+                    key={doc.id}
+                    href={`/campaigns/${id}/proforma/${doc.id}`}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors group"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {typeLabel[doc.type] ?? doc.type}
+                        </p>
+                        <p className="text-xs text-gray-400">{doc.document_number}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {doc.total_amount != null && (
+                        <span className="text-sm font-semibold text-gray-700">
+                          {formatCurrency(doc.total_amount, doc.currency)}
+                        </span>
+                      )}
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          isSent
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}
+                      >
+                        {isSent ? 'Sent' : 'Draft'}
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Activity timeline */}
