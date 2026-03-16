@@ -1,15 +1,18 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   FileText, Download, Loader2, ChevronDown, ChevronUp,
-  AlertTriangle, CheckCircle2, XCircle, Package,
+  AlertTriangle, CheckCircle2, XCircle, Package, Edit2, Copy,
+  History, AlertCircle,
 } from 'lucide-react'
-import { voidDocumentAction, markDocumentReviewedAction } from '@/lib/actions/documents'
+import { voidDocumentAction, markDocumentReviewedAction, createVersionAction } from '@/lib/actions/documents'
 import type { DocumentRow, UploadRecordRow } from '@/lib/data/documents'
 import type { UserRole } from '@/types'
 import CustomBundleModal from './custom-bundle-modal'
+import CloneDocumentModal, { type CloneableDoc } from './clone-document-modal'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -72,9 +75,11 @@ export default function DocumentBundle({
   userRole,
   currency,
 }: DocumentBundleProps) {
+  const router = useRouter()
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
   const [showVoided, setShowVoided] = useState(false)
+  const [showSuperseded, setShowSuperseded] = useState(false)
   const [customBundleOpen, setCustomBundleOpen] = useState(false)
 
   // Void state
@@ -87,8 +92,18 @@ export default function DocumentBundle({
   const [, startReviewTransition] = useTransition()
   const [reviewError, setReviewError] = useState<string | null>(null)
 
-  const activeDocs = documents.filter((d) => d.status !== 'void')
+  // Edit/version state
+  const [editingDocId, setEditingDocId] = useState<string | null>(null)
+  const [editReason, setEditReason] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
+  const [, startEditTransition] = useTransition()
+
+  // Clone state
+  const [cloneDoc, setCloneDoc] = useState<CloneableDoc | null>(null)
+
+  const activeDocs = documents.filter((d) => d.status !== 'void' && d.status !== 'superseded')
   const voidedDocs = documents.filter((d) => d.status === 'void')
+  const supersededDocs = documents.filter((d) => d.status === 'superseded')
   const outdatedDocs = activeDocs.filter((d) => d.status === 'outdated')
 
   async function handleDownloadAll() {
@@ -105,7 +120,6 @@ export default function DocumentBundle({
         setDownloadError(json.error ?? 'Failed to generate bundle.')
         return
       }
-      // Trigger download
       const a = document.createElement('a')
       a.href = json.download_url
       a.download = `bundle-${campaignId}.pdf`
@@ -140,9 +154,45 @@ export default function DocumentBundle({
     })
   }
 
+  // Create a new version of a CURRENT/OUTDATED doc and navigate to its edit page
+  function handleCreateVersion(docId: string, reason: string) {
+    setEditError(null)
+    startEditTransition(async () => {
+      const res = await createVersionAction(docId, reason)
+      if (res.error) {
+        setEditError(res.error)
+        return
+      }
+      setEditingDocId(null)
+      setEditReason('')
+      const { newDocId, type, campaignId: cId } = res
+      if (type === 'proforma_invoice') {
+        router.push(`/campaigns/${cId}/proforma/${newDocId}/edit`)
+      } else if (type === 'invoice') {
+        router.push(`/campaigns/${cId}/invoice/${newDocId}/edit`)
+      } else {
+        router.push(`/campaigns/${cId}`)
+      }
+    })
+  }
+
   const docHref = (doc: DocumentRow) => {
     if (doc.type === 'proforma_invoice') return `/campaigns/${campaignId}/proforma/${doc.id}`
     if (doc.type === 'invoice') return `/campaigns/${campaignId}/invoice/${doc.id}`
+    return null
+  }
+
+  const editHref = (doc: DocumentRow) => {
+    if (doc.status !== 'draft') return null
+    if (doc.type === 'proforma_invoice') return `/campaigns/${campaignId}/proforma/${doc.id}/edit`
+    if (doc.type === 'invoice') return `/campaigns/${campaignId}/invoice/${doc.id}/edit`
+    return null
+  }
+
+  const pdfHref = (doc: DocumentRow) => {
+    if (doc.type === 'proforma_invoice') return `/api/proforma/${doc.id}/pdf`
+    if (doc.type === 'invoice') return `/api/invoice/${doc.id}/pdf`
+    if (doc.file_path) return `/api/documents/${doc.id}/download`
     return null
   }
 
@@ -180,15 +230,13 @@ export default function DocumentBundle({
       </div>
 
       {downloadError && (
-        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {downloadError}
-        </p>
+        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{downloadError}</p>
       )}
-
       {reviewError && (
-        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {reviewError}
-        </p>
+        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{reviewError}</p>
+      )}
+      {editError && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{editError}</p>
       )}
 
       {/* OUTDATED banner */}
@@ -213,9 +261,16 @@ export default function DocumentBundle({
           {/* Active documents */}
           {activeDocs.map((doc) => {
             const href = docHref(doc)
+            const editLink = editHref(doc)
+            const pdf = pdfHref(doc)
             const isOutdated = doc.status === 'outdated'
+            const isDraft = doc.status === 'draft'
+            const isCurrent = doc.status === 'current'
             const canVoid = userRole === 'admin' && doc.status !== 'void'
             const canReview = (userRole === 'admin' || userRole === 'finance_exec') && isOutdated
+            const canEdit = ['admin', 'finance_exec', 'planner'].includes(userRole)
+            const canClone = ['admin', 'finance_exec', 'planner'].includes(userRole) && (doc.type === 'proforma_invoice' || doc.type === 'invoice')
+            const needsVersion = (isCurrent || isOutdated) && canEdit
 
             return (
               <div
@@ -228,6 +283,9 @@ export default function DocumentBundle({
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
                         {TYPE_LABELS[doc.type] ?? doc.type}
+                        {(doc.version ?? 1) > 1 && (
+                          <span className="ml-1.5 text-[10px] text-gray-400 font-normal">v{doc.version}</span>
+                        )}
                       </p>
                       <p className="text-[11px] text-gray-400">{doc.document_number}</p>
                     </div>
@@ -248,35 +306,61 @@ export default function DocumentBundle({
                 {/* Action row */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {href && (
-                    <Link
-                      href={href}
-                      className="text-[11px] font-medium text-[#0D9488] hover:underline min-h-[28px] flex items-center"
-                    >
+                    <Link href={href} className="text-[11px] font-medium text-[#0D9488] hover:underline min-h-[28px] flex items-center">
                       View
                     </Link>
                   )}
-                  {(doc.file_path || doc.type === 'proforma_invoice' || doc.type === 'invoice') && (
+                  {pdf && (
                     <a
-                      href={doc.type === 'proforma_invoice'
-                        ? `/api/proforma/${doc.id}/pdf`
-                        : doc.type === 'invoice'
-                          ? `/api/invoice/${doc.id}/pdf`
-                          : `/api/documents/${doc.id}/download`}
+                      href={pdf}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-gray-700 min-h-[28px]"
                     >
                       <Download className="h-3 w-3" />
-                      Download
+                      PDF
                     </a>
                   )}
+
+                  {/* DRAFT: direct edit link */}
+                  {isDraft && editLink && canEdit && (
+                    <Link
+                      href={editLink}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-800 min-h-[28px]"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                      Edit
+                    </Link>
+                  )}
+
+                  {/* CURRENT / OUTDATED: create new version */}
+                  {needsVersion && editingDocId !== doc.id && (
+                    <button
+                      onClick={() => { setEditingDocId(doc.id); setEditReason(''); setEditError(null) }}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-800 min-h-[28px]"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                      Edit
+                    </button>
+                  )}
+
+                  {canClone && (
+                    <button
+                      onClick={() => setCloneDoc(doc)}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-600 hover:text-purple-800 min-h-[28px]"
+                    >
+                      <Copy className="h-3 w-3" />
+                      Clone
+                    </button>
+                  )}
+
                   {canReview && (
                     <button
                       onClick={() => handleMarkReviewed(doc.id)}
                       className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700 hover:text-green-900 min-h-[28px]"
                     >
                       <CheckCircle2 className="h-3 w-3" />
-                      Mark Reviewed
+                      Reviewed
                     </button>
                   )}
                   {canVoid && voidingDocId !== doc.id && (
@@ -289,6 +373,39 @@ export default function DocumentBundle({
                     </button>
                   )}
                 </div>
+
+                {/* Inline version confirmation */}
+                {editingDocId === doc.id && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-start gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs font-semibold text-blue-800">
+                        This document has been sent. Editing will create a new version (v{(doc.version ?? 1) + 1}). The current version will be marked SUPERSEDED.
+                      </p>
+                    </div>
+                    <input
+                      value={editReason}
+                      onChange={(e) => setEditReason(e.target.value)}
+                      placeholder="Reason for revision (optional)…"
+                      className="w-full px-2.5 py-1.5 rounded border border-blue-200 text-xs focus:outline-none bg-white"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleCreateVersion(doc.id, editReason)}
+                        className="min-h-[30px] px-3 py-1 rounded text-xs font-semibold text-white transition"
+                        style={{ background: '#0D9488' }}
+                      >
+                        Proceed
+                      </button>
+                      <button
+                        onClick={() => setEditingDocId(null)}
+                        className="min-h-[30px] px-3 py-1 rounded text-xs font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Inline void confirmation */}
                 {voidingDocId === doc.id && (
@@ -330,9 +447,7 @@ export default function DocumentBundle({
                 <div className="flex items-center gap-2.5 min-w-0">
                   <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      Media Plan / MPO
-                    </p>
+                    <p className="text-sm font-medium text-gray-900 truncate">Media Plan / MPO</p>
                     <p className="text-[11px] text-gray-400 truncate">{uploadRecord.file_name}</p>
                   </div>
                 </div>
@@ -340,9 +455,7 @@ export default function DocumentBundle({
                   <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold border uppercase tracking-wide bg-gray-100 text-gray-500 border-gray-200">
                     plan
                   </span>
-                  <span className="text-[11px] text-gray-400 hidden sm:inline">
-                    {formatDate(uploadRecord.created_at)}
-                  </span>
+                  <span className="text-[11px] text-gray-400 hidden sm:inline">{formatDate(uploadRecord.created_at)}</span>
                   <a
                     href={uploadRecord.file_url}
                     target="_blank"
@@ -354,6 +467,73 @@ export default function DocumentBundle({
                   </a>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Superseded docs (collapsible) */}
+          {supersededDocs.length > 0 && (
+            <div className="pt-1">
+              <button
+                onClick={() => setShowSuperseded((v) => !v)}
+                className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 min-h-[28px]"
+              >
+                <History className="h-3 w-3" />
+                {showSuperseded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                {supersededDocs.length} superseded version{supersededDocs.length > 1 ? 's' : ''}
+              </button>
+
+              {showSuperseded && (
+                <div className="mt-1.5 space-y-1">
+                  {supersededDocs.map((doc) => {
+                    const href = docHref(doc)
+                    const pdf = pdfHref(doc)
+                    const canClone = ['admin', 'finance_exec', 'planner'].includes(userRole) && (doc.type === 'proforma_invoice' || doc.type === 'invoice')
+                    return (
+                      <div key={doc.id} className="rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3 min-w-0">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <FileText className="h-4 w-4 text-gray-300 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-400 truncate">
+                                {TYPE_LABELS[doc.type] ?? doc.type}
+                                {(doc.version ?? 1) > 0 && (
+                                  <span className="ml-1.5 text-[10px]">v{doc.version}</span>
+                                )}
+                              </p>
+                              <p className="text-[11px] text-gray-400">{doc.document_number}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <StatusBadge status="superseded" />
+                            {href && (
+                              <Link href={href} className="text-[11px] font-medium text-gray-500 hover:text-gray-700 min-h-[28px] flex items-center">
+                                View
+                              </Link>
+                            )}
+                            {pdf && (
+                              <a href={pdf} target="_blank" rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-gray-700 min-h-[28px]"
+                              >
+                                <Download className="h-3 w-3" />
+                                PDF
+                              </a>
+                            )}
+                            {canClone && (
+                              <button
+                                onClick={() => setCloneDoc(doc)}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-purple-500 hover:text-purple-700 min-h-[28px]"
+                              >
+                                <Copy className="h-3 w-3" />
+                                Clone
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -402,6 +582,14 @@ export default function DocumentBundle({
           campaignId={campaignId}
           currency={currency}
           onClose={() => setCustomBundleOpen(false)}
+        />
+      )}
+
+      {cloneDoc && (
+        <CloneDocumentModal
+          doc={cloneDoc}
+          campaignId={campaignId}
+          onClose={() => setCloneDoc(null)}
         />
       )}
     </div>

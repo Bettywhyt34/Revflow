@@ -170,6 +170,70 @@ export async function createProformaAction(
   return { docId: doc.id, docNumber: docNumber }
 }
 
+// ── Update Draft ─────────────────────────────────────────────────────────────
+
+export async function updateProformaDraftAction(
+  docId: string,
+  input: CreateProformaInput,
+): Promise<{ error?: string }> {
+  const session = await auth()
+  if (!session?.user?.id) return { error: 'Not authenticated.' }
+
+  const { role, orgId } = session.user
+  if (role !== 'admin' && role !== 'planner' && role !== 'finance_exec') {
+    return { error: 'Insufficient permissions.' }
+  }
+
+  const supabase = createAdminClient()
+
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('id, status, campaign_id, campaigns!inner(org_id)')
+    .eq('id', docId)
+    .maybeSingle()
+
+  if (!doc) return { error: 'Document not found.' }
+  const docCampaign = (doc.campaigns as unknown) as { org_id: string } | null
+  if (!docCampaign || docCampaign.org_id !== orgId) return { error: 'Document not found.' }
+  if (doc.status !== 'draft') return { error: 'Only DRAFT documents can be edited.' }
+
+  const subtotal = input.lineItems.reduce((s, i) => s + i.line_total, 0)
+  const vatAmount = Math.round(subtotal * VAT_RATE * 100) / 100
+  const totalAmount = Math.round((subtotal + vatAmount) * 100) / 100
+
+  const issueDate = input.issueDateOverride ?? new Date().toISOString().split('T')[0]
+  const dueDate = new Date(
+    new Date(issueDate).getTime() + input.paymentTermsDays * 86400 * 1000,
+  ).toISOString().split('T')[0]
+
+  const { error: updateErr } = await supabase
+    .from('documents')
+    .update({
+      amount_before_vat: subtotal,
+      agency_fee_amount: 0,
+      vat_amount: vatAmount,
+      total_amount: totalAmount,
+      issue_date: issueDate,
+      due_date: dueDate,
+      recognition_period_start: input.recognitionStart,
+      recognition_period_end: input.recognitionEnd,
+      recipient_email: input.recipientEmail,
+      recipient_name: input.recipientName,
+      cc_emails: input.ccEmails ?? [],
+      notes: input.notes || null,
+      terms: `Payment due within ${input.paymentTermsDays} days of invoice date.`,
+      line_items: input.lineItems,
+      invoice_subject: input.invoiceSubject || null,
+      template_id: input.templateId ?? '1',
+    })
+    .eq('id', docId)
+
+  if (updateErr) return { error: 'Failed to update document.' }
+
+  revalidatePath(`/campaigns/${doc.campaign_id}`)
+  return {}
+}
+
 // ── Send ────────────────────────────────────────────────────────────────────
 
 export async function sendProformaAction(

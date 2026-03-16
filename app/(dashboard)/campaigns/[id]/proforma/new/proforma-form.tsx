@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Send, Save, CheckCircle, Plus, Trash2 } from 'lucide-react'
 import { toWords } from 'number-to-words'
-import { createProformaAction, sendProformaAction, getProformaPreviewAction } from '@/lib/actions/proforma'
+import { createProformaAction, updateProformaDraftAction, sendProformaAction, getProformaPreviewAction } from '@/lib/actions/proforma'
 import { EmailChips } from '@/components/clients/client-form'
 import SendDialog from '@/components/documents/send-dialog'
 import { useOrgSettings } from '@/components/layout/org-settings-context'
@@ -111,6 +111,30 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   )
 }
 
+// ── Initial doc type (for edit mode) ─────────────────────────────────────
+
+export interface InitialProformaDoc {
+  id: string
+  document_number: string
+  version: number
+  recipient_name: string | null
+  recipient_email: string | null
+  cc_emails: string[]
+  recognition_period_start: string | null
+  recognition_period_end: string | null
+  invoice_subject: string | null
+  line_items: Array<{ qty: number; description: string; unit_price: number; line_total: number }>
+  issue_date: string | null
+  due_date: string | null
+  notes: string | null
+  template_id: string
+}
+
+function computeTermsDays(issueDate: string | null, dueDate: string | null): number {
+  if (!issueDate || !dueDate) return 30
+  return Math.max(0, Math.round((new Date(dueDate).getTime() - new Date(issueDate).getTime()) / 86400000))
+}
+
 // ── Main form ─────────────────────────────────────────────────────────────
 
 export default function ProformaForm({
@@ -123,6 +147,8 @@ export default function ProformaForm({
   clientCustomerId,
   clientPaymentTermsDays,
   defaultTemplateId = '1',
+  initialDoc,
+  editDocId,
 }: {
   campaignId: string
   campaign: Campaign
@@ -133,14 +159,16 @@ export default function ProformaForm({
   clientCustomerId?: string | null
   clientPaymentTermsDays?: number | null
   defaultTemplateId?: string
+  initialDoc?: InitialProformaDoc
+  editDocId?: string
 }) {
   const { primaryColor, logoUrl: orgLogoUrl, orgName } = useOrgSettings()
   const [templateId, setTemplateId] = useState<TemplateId>(
     (defaultTemplateId as TemplateId) ?? '1',
   )
   const [isPending, startTransition] = useTransition()
-  const [savedDocId, setSavedDocId] = useState<string | null>(null)
-  const [savedDocNumber, setSavedDocNumber] = useState<string | null>(null)
+  const [savedDocId, setSavedDocId] = useState<string | null>(editDocId ?? null)
+  const [savedDocNumber, setSavedDocNumber] = useState<string | null>(initialDoc?.document_number ?? null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
   const [stage, setStage] = useState<'editing' | 'draft_saved' | 'sending'>('editing')
@@ -148,40 +176,50 @@ export default function ProformaForm({
 
   // Recipient
   const [recipientName, setRecipientName] = useState(
+    initialDoc?.recipient_name ??
     clientName ?? (campaign.agency_name && campaign.campaign_type === 'agency'
       ? campaign.agency_name
       : campaign.advertiser),
   )
-  const [recipientEmail, setRecipientEmail] = useState(clientEmail ?? '')
-  const [ccEmails, setCcEmails] = useState<string[]>(clientCcEmails ?? [])
+  const [recipientEmail, setRecipientEmail] = useState(initialDoc?.recipient_email ?? clientEmail ?? '')
+  const [ccEmails, setCcEmails] = useState<string[]>(initialDoc?.cc_emails ?? clientCcEmails ?? [])
 
   // Recognition period
-  const [recognitionStart, setRecognitionStart] = useState(campaign.start_date ?? '')
-  const [recognitionEnd, setRecognitionEnd] = useState(campaign.end_date ?? '')
+  const [recognitionStart, setRecognitionStart] = useState(initialDoc?.recognition_period_start ?? campaign.start_date ?? '')
+  const [recognitionEnd, setRecognitionEnd] = useState(initialDoc?.recognition_period_end ?? campaign.end_date ?? '')
 
   // Invoice subject
-  const [subject, setSubject] = useState(campaign.title)
+  const [subject, setSubject] = useState(initialDoc?.invoice_subject ?? campaign.title)
 
-  // Line items — 3 rows by default, first pre-filled from campaign
-  const [lineItems, setLineItems] = useState<LineItem[]>([
-    {
-      id: '1',
-      qty: '1',
-      description: campaign.title,
-      unitPrice: campaign.planned_contract_value != null
-        ? String(campaign.planned_contract_value)
-        : '',
-    },
-    { id: '2', qty: '', description: '', unitPrice: '' },
-    { id: '3', qty: '', description: '', unitPrice: '' },
-  ])
+  // Line items
+  const [lineItems, setLineItems] = useState<LineItem[]>(
+    initialDoc?.line_items && initialDoc.line_items.length > 0
+      ? initialDoc.line_items.map((item, i) => ({
+          id: String(i + 1),
+          qty: String(item.qty),
+          description: item.description,
+          unitPrice: String(item.unit_price),
+        }))
+      : [
+          {
+            id: '1',
+            qty: '1',
+            description: campaign.title,
+            unitPrice: campaign.planned_contract_value != null
+              ? String(campaign.planned_contract_value)
+              : '',
+          },
+          { id: '2', qty: '', description: '', unitPrice: '' },
+          { id: '3', qty: '', description: '', unitPrice: '' },
+        ],
+  )
 
   // Issue date / payment terms
-  const [issueDate, setIssueDate] = useState(today())
+  const [issueDate, setIssueDate] = useState(initialDoc?.issue_date ?? today())
   const [paymentTermsDays, setPaymentTermsDays] = useState(
-    clientPaymentTermsDays ?? 30,
+    initialDoc ? computeTermsDays(initialDoc.issue_date, initialDoc.due_date) : (clientPaymentTermsDays ?? 30),
   )
-  const [notes, setNotes] = useState('')
+  const [notes, setNotes] = useState(initialDoc?.notes ?? '')
 
   const dueDate = issueDate ? addDays(issueDate, paymentTermsDays) : ''
 
@@ -265,10 +303,13 @@ export default function ProformaForm({
   function handleSaveDraft() {
     setSaveError(null)
     startTransition(async () => {
-      const result = await createProformaAction(buildSaveInput())
-      if (result.error) {
-        setSaveError(result.error)
+      if (editDocId) {
+        const result = await updateProformaDraftAction(editDocId, buildSaveInput())
+        if (result.error) { setSaveError(result.error); return }
+        setStage('draft_saved')
       } else {
+        const result = await createProformaAction(buildSaveInput())
+        if (result.error) { setSaveError(result.error); return }
         setSavedDocId(result.docId!)
         setSavedDocNumber(result.docNumber ?? null)
         setStage('draft_saved')
@@ -281,7 +322,13 @@ export default function ProformaForm({
     startTransition(async () => {
       let docId = savedDocId
       let docNumber = savedDocNumber
-      if (!docId) {
+      if (editDocId) {
+        // Edit mode: save changes first, then open send dialog
+        const result = await updateProformaDraftAction(editDocId, buildSaveInput())
+        if (result.error) { setSendError(result.error); return }
+        docId = editDocId
+        setStage('draft_saved')
+      } else if (!docId) {
         setStage('sending')
         const result = await createProformaAction(buildSaveInput())
         if (result.error) {
@@ -313,16 +360,21 @@ export default function ProformaForm({
       </div>
 
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Create Proforma Invoice</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {editDocId ? `Edit Proforma Invoice${initialDoc?.version && initialDoc.version > 1 ? ` (v${initialDoc.version})` : ''}` : 'Create Proforma Invoice'}
+        </h1>
         <p className="text-sm text-gray-500 mt-1">
           {campaign.tracker_id} · {campaign.title}
+          {editDocId && savedDocNumber && <span className="text-gray-300 ml-1">· {savedDocNumber}</span>}
         </p>
       </div>
 
       {stage === 'draft_saved' && (
         <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
           <CheckCircle className="h-4 w-4 flex-shrink-0" />
-          Draft saved as {savedDocNumber}. Review the preview and send when ready.
+          {editDocId
+            ? 'Changes saved. Use Send Now to deliver the updated document.'
+            : `Draft saved as ${savedDocNumber}. Review the preview and send when ready.`}
         </div>
       )}
 

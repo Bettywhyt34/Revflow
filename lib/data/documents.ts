@@ -5,6 +5,7 @@ export interface DocumentRow {
   type: string
   status: string
   document_number: string
+  version: number
   amount_before_vat: number | null
   agency_fee_amount: number | null
   vat_amount: number | null
@@ -23,6 +24,11 @@ export interface DocumentRow {
   void_reason: string | null
   reviewed_at: string | null
   reviewed_by: string | null
+  // Versioning columns (migration 021)
+  cloned_from_id: string | null
+  edit_reason: string | null
+  superseded_at: string | null
+  superseded_by: string | null
 }
 
 export interface UploadRecordRow {
@@ -88,15 +94,25 @@ export async function getNextDocumentNumber(
   return data as string
 }
 
+const DOCUMENT_ROW_SELECT = 'id, type, status, document_number, version, amount_before_vat, agency_fee_amount, vat_amount, total_amount, currency, issue_date, due_date, sent_at, created_at, file_path, bundle_order, parent_document_id, voided_by, voided_at, void_reason, reviewed_at, reviewed_by, cloned_from_id, edit_reason, superseded_at, superseded_by'
+
 export async function getDocumentsByCampaign(campaignId: string): Promise<DocumentRow[]> {
   const supabase = createAdminClient()
   const { data } = await supabase
     .from('documents')
-    .select(
-      'id, type, status, document_number, amount_before_vat, agency_fee_amount, vat_amount, total_amount, currency, issue_date, due_date, sent_at, created_at, file_path, bundle_order, parent_document_id, voided_by, voided_at, void_reason, reviewed_at, reviewed_by',
-    )
+    .select(DOCUMENT_ROW_SELECT)
     .eq('campaign_id', campaignId)
     .order('created_at', { ascending: false })
+  return (data ?? []) as DocumentRow[]
+}
+
+export async function getDocumentVersionHistory(documentNumber: string): Promise<DocumentRow[]> {
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from('documents')
+    .select(DOCUMENT_ROW_SELECT)
+    .eq('document_number', documentNumber)
+    .order('version', { ascending: true })
   return (data ?? []) as DocumentRow[]
 }
 
