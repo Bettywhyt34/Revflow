@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import { getCampaignById } from '@/lib/data/campaigns'
 import { getOrgSettingsWithDefaults } from '@/lib/data/settings'
+import { getLatestProformaForCampaign } from '@/lib/data/documents'
 import type { UserRole } from '@/types'
 import InvoiceForm from './invoice-form'
 
@@ -22,9 +23,10 @@ export default async function NewInvoicePage({
 
   if (role !== 'admin' && role !== 'finance_exec') redirect(`/campaigns/${id}`)
 
-  const [campaign, orgSettings] = await Promise.all([
+  const [campaign, orgSettings, latestProforma] = await Promise.all([
     getCampaignById(id, session!.user.orgId),
     getOrgSettingsWithDefaults(session!.user.orgId),
+    getLatestProformaForCampaign(id),
   ])
   if (!campaign) notFound()
 
@@ -63,6 +65,7 @@ export default async function NewInvoicePage({
         clientPaymentTermsDays={parsePaymentTermsDays(client?.payment_terms)}
         poNumber={campaign.po_number ?? null}
         defaultTemplateId={orgSettings.default_invoice_template ?? '1'}
+        latestProforma={latestProforma}
       />
     </div>
   )

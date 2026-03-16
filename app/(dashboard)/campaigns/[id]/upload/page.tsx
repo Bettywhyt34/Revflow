@@ -28,6 +28,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
         trackerID={campaign.tracker_id}
         campaignTitle={campaign.title}
         advertiser={campaign.advertiser}
+        userRole={role}
       />
     </div>
   )

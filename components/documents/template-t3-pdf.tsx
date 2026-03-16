@@ -277,7 +277,7 @@ export default function TemplateT3PDF({ data }: { data: DocumentTemplateData }) 
                       ['DUE DATE', data.dueDate ?? '—'],
                       data.poNumber ? ['PO NUMBER', data.poNumber] : null,
                     ] as ([string, string] | null)[]
-                  ).filter(Boolean).map(([label, value]) => (
+                  ).filter((x): x is [string, string] => x !== null).map(([label, value]) => (
                     <View key={label} style={styles.cardFieldRow}>
                       <Text style={styles.cardFieldLabel}>{label}</Text>
                       <Text style={styles.cardFieldValue}>{value}</Text>

@@ -18,19 +18,100 @@ export async function saveUploadRecordAction(data: {
   confirmedAmountBeforeVat: number
   detectionConfidence: DetectionConfidence
   extractionResult: object
+  adminOverride?: boolean
+  adminOverrideReason?: string
 }): Promise<{ error: string } | never> {
   const session = await auth()
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
-  const { role, orgId } = session.user
+  const { role, orgId, id: userId } = session.user
   if (role !== 'admin' && role !== 'planner') return { error: 'Insufficient permissions.' }
 
   const supabase = createAdminClient()
 
-  // Insert upload record
+  // ── Re-upload guard ──────────────────────────────────────────────────────────
+  const { count: existingCount } = await supabase
+    .from('upload_records')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', data.campaignId)
+
+  const isReUpload = (existingCount ?? 0) > 0
+
+  if (isReUpload) {
+    // Check for existing payments
+    const { count: paymentCount } = await supabase
+      .from('payments')
+      .select('id', { count: 'exact', head: true })
+      .eq('campaign_id', data.campaignId)
+
+    const hasPayments = (paymentCount ?? 0) > 0
+
+    if (hasPayments && !data.adminOverride) {
+      return { error: 'BLOCKED_BY_PAYMENTS' }
+    }
+
+    if (hasPayments && data.adminOverride) {
+      // Log override notification to admins + finance_exec
+      const { data: staffToNotify } = await supabase
+        .from('users')
+        .select('id')
+        .eq('org_id', orgId)
+        .in('role', ['admin', 'finance_exec'])
+
+      if (staffToNotify && staffToNotify.length > 0) {
+        await supabase.from('notifications').insert(
+          staffToNotify.map((u) => ({
+            org_id: orgId,
+            campaign_id: data.campaignId,
+            user_id: u.id,
+            type: 'system',
+            title: 'Plan re-uploaded (admin override)',
+            message: `Plan re-uploaded by admin with payments present. Reason: ${data.adminOverrideReason ?? 'No reason provided'}.`,
+          })),
+        )
+      }
+    }
+
+    // Flag CURRENT/DRAFT proforma_invoice and invoice docs as OUTDATED
+    const { data: docsToOutdate } = await supabase
+      .from('documents')
+      .select('id')
+      .eq('campaign_id', data.campaignId)
+      .in('type', ['proforma_invoice', 'invoice'])
+      .in('status', ['current', 'draft'])
+
+    if (docsToOutdate && docsToOutdate.length > 0) {
+      await supabase
+        .from('documents')
+        .update({ status: 'outdated' })
+        .in('id', docsToOutdate.map((d) => d.id))
+
+      // Notify finance_exec + admin about OUTDATED docs
+      const { data: staffToNotify } = await supabase
+        .from('users')
+        .select('id')
+        .eq('org_id', orgId)
+        .in('role', ['admin', 'finance_exec'])
+
+      if (staffToNotify && staffToNotify.length > 0) {
+        await supabase.from('notifications').insert(
+          staffToNotify.map((u) => ({
+            org_id: orgId,
+            campaign_id: data.campaignId,
+            user_id: u.id,
+            type: 'system',
+            title: 'Plan updated — documents flagged OUTDATED',
+            message: `Plan re-uploaded. ${docsToOutdate.length} document(s) flagged OUTDATED. Review required.`,
+          })),
+        )
+      }
+    }
+  }
+
+  // ── Insert upload record ─────────────────────────────────────────────────────
   const { error: insertErr } = await supabase.from('upload_records').insert({
     campaign_id: data.campaignId,
-    uploader_id: session.user.id,
+    uploader_id: userId,
     file_name: data.fileName,
     file_url: data.fileUrl,
     file_type: data.fileType,

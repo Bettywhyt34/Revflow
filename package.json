@@ -25,6 +25,7 @@
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",
     "number-to-words": "^1.2.4",
+    "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",

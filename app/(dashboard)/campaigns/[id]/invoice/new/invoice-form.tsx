@@ -2,9 +2,9 @@
 
 import { useState, useTransition, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Send, Save, CheckCircle, Plus, Trash2, Paperclip, X } from 'lucide-react'
+import { ArrowLeft, Send, Save, CheckCircle, Plus, Trash2, Paperclip, X, AlertTriangle } from 'lucide-react'
 import { toWords } from 'number-to-words'
-import { createInvoiceAction, sendInvoiceAction, getInvoicePreviewAction } from '@/lib/actions/invoice'
+import { createInvoiceAction, sendInvoiceAction, getInvoicePreviewAction, type MismatchInfo } from '@/lib/actions/invoice'
 import { markDocumentAsSentAction, deleteDocumentAction } from '@/lib/actions/proforma'
 import { EmailChips } from '@/components/clients/client-form'
 import SendDialog from '@/components/documents/send-dialog'
@@ -104,6 +104,7 @@ export default function InvoiceForm({
   clientPaymentTermsDays,
   poNumber,
   defaultTemplateId = '1',
+  latestProforma,
 }: {
   campaignId: string
   campaign: Campaign
@@ -115,6 +116,7 @@ export default function InvoiceForm({
   clientPaymentTermsDays?: number | null
   poNumber?: string | null
   defaultTemplateId?: string
+  latestProforma?: { amount_before_vat: number; vat_amount: number; total_amount: number } | null
 }) {
   const { primaryColor, logoUrl: orgLogoUrl, orgName } = useOrgSettings()
   const [templateId, setTemplateId] = useState<TemplateId>(
@@ -126,6 +128,11 @@ export default function InvoiceForm({
   const [saveError, setSaveError] = useState<string | null>(null)
   const [stage, setStage] = useState<'editing' | 'draft_saved' | 'sending'>('editing')
   const [dialogOpen, setDialogOpen] = useState(false)
+
+  // Mismatch detection
+  const [mismatch, setMismatch] = useState<MismatchInfo | null>(null)
+  const [overrideReason, setOverrideReason] = useState('')
+  const [pendingSendAfterMismatch, setPendingSendAfterMismatch] = useState(false)
 
   // MPO upload
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -235,28 +242,47 @@ export default function InvoiceForm({
     }
   }
 
-  function handleSaveDraft() {
+  function handleSaveDraft(mismatchAcknowledged = false) {
     setSaveError(null)
     startTransition(async () => {
-      const result = await createInvoiceAction(buildSaveInput())
-      if (result.error) {
+      const input = {
+        ...buildSaveInput(),
+        mismatchAcknowledged,
+        mismatchOverrideReason: mismatchAcknowledged ? overrideReason : undefined,
+      }
+      const result = await createInvoiceAction(input)
+      if (result.mismatch) {
+        setMismatch(result.mismatch)
+      } else if (result.error) {
         setSaveError(result.error)
       } else {
         setSavedDocId(result.docId!)
         setSavedDocNumber(result.docNumber ?? null)
         setStage('draft_saved')
+        setMismatch(null)
       }
     })
   }
 
-  function handleSaveAndSend() {
+  function handleSaveAndSend(mismatchAcknowledged = false) {
     setSaveError(null)
     startTransition(async () => {
       let docId = savedDocId
       let docNumber = savedDocNumber
       if (!docId) {
         setStage('sending')
-        const result = await createInvoiceAction(buildSaveInput())
+        const input = {
+          ...buildSaveInput(),
+          mismatchAcknowledged,
+          mismatchOverrideReason: mismatchAcknowledged ? overrideReason : undefined,
+        }
+        const result = await createInvoiceAction(input)
+        if (result.mismatch) {
+          setMismatch(result.mismatch)
+          setPendingSendAfterMismatch(true)
+          setStage('editing')
+          return
+        }
         if (result.error) {
           setSaveError(result.error)
           setStage('editing')
@@ -267,6 +293,7 @@ export default function InvoiceForm({
         setSavedDocId(docId)
         setSavedDocNumber(docNumber)
         setStage('draft_saved')
+        setMismatch(null)
       }
       setDialogOpen(true)
     })
@@ -516,10 +543,126 @@ export default function InvoiceForm({
             </p>
           )}
 
+          {/* Mismatch comparison table */}
+          {mismatch && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Value mismatch with Proforma</p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    The invoice values differ from the most recent proforma. Review the differences below.
+                  </p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-amber-200">
+                      <th className="text-left py-1.5 font-semibold text-amber-900">Field</th>
+                      <th className="text-right py-1.5 font-semibold text-amber-900">Proforma</th>
+                      <th className="text-right py-1.5 font-semibold text-amber-900">Invoice</th>
+                      <th className="text-right py-1.5 font-semibold text-amber-900">Difference</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { label: 'Amount Before VAT', pf: mismatch.proforma.amount_before_vat, inv: mismatch.invoice.amount_before_vat },
+                      { label: 'VAT Amount', pf: mismatch.proforma.vat_amount, inv: mismatch.invoice.vat_amount },
+                      { label: 'Total Amount', pf: mismatch.proforma.total_amount, inv: mismatch.invoice.total_amount },
+                    ].map(({ label, pf, inv }) => {
+                      const diff = inv - pf
+                      const hasDiff = Math.abs(diff) > 0.01
+                      return (
+                        <tr key={label} className={`border-b border-amber-100 ${hasDiff ? 'bg-amber-100/50' : ''}`}>
+                          <td className="py-1.5 text-amber-900">{label}</td>
+                          <td className="py-1.5 text-right tabular-nums text-amber-800">{fmt(pf, campaign.currency)}</td>
+                          <td className="py-1.5 text-right tabular-nums text-amber-800">{fmt(inv, campaign.currency)}</td>
+                          <td className={`py-1.5 text-right tabular-nums font-semibold ${hasDiff ? 'text-red-600' : 'text-gray-400'}`}>
+                            {hasDiff ? (diff > 0 ? '+' : '') + fmt(diff, campaign.currency) : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  // Recalculate line items to match proforma amount_before_vat
+                  const targetSubtotal = mismatch.proforma.amount_before_vat
+                  setLineItems((prev) => {
+                    const nonEmpty = prev.filter((i) => {
+                      const qty = parseFloat(i.qty) || 0
+                      const price = parseFloat(i.unitPrice) || 0
+                      return qty > 0 && price > 0
+                    })
+                    if (nonEmpty.length === 1) {
+                      const item = nonEmpty[0]
+                      const qty = parseFloat(item.qty) || 1
+                      return prev.map((i) =>
+                        i.id === item.id
+                          ? { ...i, unitPrice: String(Math.round((targetSubtotal / qty) * 100) / 100) }
+                          : i,
+                      )
+                    } else if (nonEmpty.length > 1) {
+                      const lastItem = nonEmpty[nonEmpty.length - 1]
+                      const othersTotal = nonEmpty.slice(0, -1).reduce((s, i) => {
+                        const q = parseFloat(i.qty) || 0
+                        const p = parseFloat(i.unitPrice) || 0
+                        return s + q * p
+                      }, 0)
+                      const lastQty = parseFloat(lastItem.qty) || 1
+                      const newLastPrice = (targetSubtotal - othersTotal) / lastQty
+                      return prev.map((i) =>
+                        i.id === lastItem.id
+                          ? { ...i, unitPrice: String(Math.round(newLastPrice * 100) / 100) }
+                          : i,
+                      )
+                    }
+                    return prev
+                  })
+                  setMismatch(null)
+                }}
+                className="text-xs font-medium text-amber-700 hover:text-amber-900 underline"
+              >
+                Update to Match Proforma
+              </button>
+              <div className="space-y-2 pt-1 border-t border-amber-200">
+                <label className="block text-xs font-medium text-amber-900">
+                  Override reason (required to proceed with mismatched values)
+                </label>
+                <textarea
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                  rows={2}
+                  placeholder="Explain why the invoice values differ from the proforma…"
+                  className="w-full px-3 py-2 rounded-lg border border-amber-300 text-xs bg-white resize-none focus:outline-none focus:ring-2"
+                />
+                <button
+                  type="button"
+                  disabled={!overrideReason.trim() || isPending}
+                  onClick={() => {
+                    if (pendingSendAfterMismatch) {
+                      setPendingSendAfterMismatch(false)
+                      handleSaveAndSend(true)
+                    } else {
+                      handleSaveDraft(true)
+                    }
+                  }}
+                  className="min-h-[36px] px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 transition disabled:opacity-50"
+                >
+                  Proceed Anyway
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3">
             <button
-              onClick={handleSaveDraft}
+              onClick={() => handleSaveDraft(false)}
               disabled={isPending || subtotal <= 0}
               className="flex-1 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5
                 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700
@@ -529,7 +672,7 @@ export default function InvoiceForm({
               {isPending && stage === 'editing' ? 'Saving…' : 'Save Draft'}
             </button>
             <button
-              onClick={handleSaveAndSend}
+              onClick={() => handleSaveAndSend(false)}
               disabled={isPending || !canSend}
               className="flex-1 inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5
                 rounded-lg text-sm font-semibold text-white transition

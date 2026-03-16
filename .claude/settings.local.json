@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx vercel:*)"
+      "Bash(npx vercel:*)",
+      "Bash(find C:\\\\Users\\\\digit\\\\projects\\\\revflow\\\\app\\\\\\(dashboard\\):*)",
+      "Bash(ls C:\\\\Users\\\\digit\\\\projects\\\\revflow\\\\app\\\\\\(dashboard\\):*)"
     ]
   }
 }

@@ -5,7 +5,7 @@ import {
   getCampaignById,
   getCampaignNotifications,
 } from '@/lib/data/campaigns'
-import { getDocumentsByCampaign } from '@/lib/data/documents'
+import { getDocumentsByCampaign, getLatestUploadRecord } from '@/lib/data/documents'
 import {
   getPaymentsByCampaign,
   getCampaignCashTotal,
@@ -18,6 +18,7 @@ import { ArrowLeft, Calendar, User, FileText, Bell, ClipboardCheck, AlertTriangl
 import type { CampaignStatus, UserRole } from '@/types'
 import CampaignActions from './campaign-actions'
 import PaymentHistory from './payment-history'
+import DocumentBundle from './document-bundle'
 import type { InvoiceOption } from './payment-log-modal'
 
 function formatCurrency(value: number | null, currency = 'NGN'): string {
@@ -105,7 +106,7 @@ export default async function CampaignDetailPage({
   const orgId = session!.user.orgId
   const userRole = session!.user.role as UserRole
 
-  const [campaign, notifications, documents, payments, totalCash, totalWht, totalSettled] =
+  const [campaign, notifications, documents, payments, totalCash, totalWht, totalSettled, uploadRecord] =
     await Promise.all([
       getCampaignById(id, orgId),
       getCampaignNotifications(id),
@@ -114,6 +115,7 @@ export default async function CampaignDetailPage({
       getCampaignCashTotal(id),
       getCampaignWhtTotal(id),
       getCampaignTotalSettled(id),
+      getLatestUploadRecord(id),
     ])
 
   if (!campaign) notFound()
@@ -408,92 +410,24 @@ export default async function CampaignDetailPage({
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Document bundle */}
         <div className="lg:col-span-3 bg-white rounded-xl border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <FileText className="h-4 w-4 text-gray-400" />
-            Document Bundle
-          </h2>
-          {documents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <div className="h-10 w-10 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center mb-3">
-                <FileText className="h-5 w-5 text-gray-300" />
-              </div>
-              <p className="text-sm text-gray-400">No documents yet</p>
-              {status === 'plan_submitted' && (
-                <Link
-                  href={`/campaigns/${id}/proforma/new`}
-                  className="mt-3 text-xs font-medium hover:underline"
-                  style={{ color: '#0D9488' }}
-                >
-                  + Create Proforma
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {documents.map((doc) => {
-                const typeLabel: Record<string, string> = {
-                  proforma_invoice: 'Proforma Invoice',
-                  invoice: 'Invoice',
-                  purchase_order: 'Purchase Order',
-                  receipt: 'Receipt',
-                  compliance: 'Compliance',
-                }
-                const isSent = !!doc.sent_at
-
-                const docHref =
-                  doc.type === 'proforma_invoice'
-                    ? `/campaigns/${id}/proforma/${doc.id}`
-                    : doc.type === 'invoice'
-                      ? `/campaigns/${id}/invoice/${doc.id}`
-                      : doc.type === 'purchase_order' && doc.file_path
-                        ? `/api/documents/${doc.id}/download`
-                        : null
-
-                const rowContent = (
-                  <>
-                    <div className="flex items-center gap-3 min-w-0">
-                      <FileText className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {typeLabel[doc.type] ?? doc.type}
-                        </p>
-                        <p className="text-xs text-gray-400">{doc.document_number}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      {doc.total_amount != null && (
-                        <span className="text-sm font-semibold text-gray-700">
-                          {formatCurrency(doc.total_amount, doc.currency)}
-                        </span>
-                      )}
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          isSent ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                        }`}
-                      >
-                        {isSent ? 'Sent' : 'Draft'}
-                      </span>
-                    </div>
-                  </>
-                )
-
-                return docHref ? (
-                  <Link
-                    key={doc.id}
-                    href={docHref}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-4 py-3 hover:bg-gray-50 transition-colors group"
-                  >
-                    {rowContent}
-                  </Link>
-                ) : (
-                  <div
-                    key={doc.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-4 py-3"
-                  >
-                    {rowContent}
-                  </div>
-                )
-              })}
+          <DocumentBundle
+            documents={documents}
+            uploadRecord={uploadRecord}
+            campaignId={id}
+            orgId={orgId}
+            userRole={userRole}
+            currency={campaign.currency ?? 'NGN'}
+            writeOff={writeOff}
+          />
+          {documents.length === 0 && !uploadRecord && status === 'plan_submitted' && (
+            <div className="mt-3 text-center">
+              <Link
+                href={`/campaigns/${id}/proforma/new`}
+                className="text-xs font-medium hover:underline"
+                style={{ color: '#0D9488' }}
+              >
+                + Create Proforma
+              </Link>
             </div>
           )}
         </div>

@@ -72,11 +72,19 @@ export interface CreateInvoiceInput {
   notes: string
   mpoFilePath?: string | null   // path in Supabase Storage if uploaded
   templateId?: string           // '1' | '2' | '3', defaults to '1'
+  mismatchAcknowledged?: boolean
+  mismatchOverrideReason?: string
+}
+
+export interface MismatchInfo {
+  proforma: { amount_before_vat: number; vat_amount: number; total_amount: number }
+  invoice: { amount_before_vat: number; vat_amount: number; total_amount: number }
+  fields: string[]
 }
 
 export async function createInvoiceAction(
   input: CreateInvoiceInput,
-): Promise<{ error?: string; docId?: string; docNumber?: string }> {
+): Promise<{ error?: string; docId?: string; docNumber?: string; mismatch?: MismatchInfo }> {
   const session = await auth()
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
@@ -100,6 +108,110 @@ export async function createInvoiceAction(
   const subtotal = input.lineItems.reduce((s, i) => s + i.line_total, 0)
   const vatAmount = Math.round(subtotal * VAT_RATE * 100) / 100
   const totalAmount = Math.round((subtotal + vatAmount) * 100) / 100
+
+  // ── Mismatch detection ──────────────────────────────────────────────────────
+  if (!input.mismatchAcknowledged) {
+    const { data: latestProforma } = await supabase
+      .from('documents')
+      .select('amount_before_vat, vat_amount, total_amount')
+      .eq('campaign_id', input.campaignId)
+      .eq('type', 'proforma_invoice')
+      .neq('status', 'void')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (latestProforma) {
+      const THRESHOLD = 0.01
+      const diffs: string[] = []
+      if (Math.abs((latestProforma.amount_before_vat ?? 0) - subtotal) > THRESHOLD) {
+        diffs.push('Amount Before VAT')
+      }
+      if (Math.abs((latestProforma.vat_amount ?? 0) - vatAmount) > THRESHOLD) {
+        diffs.push('VAT Amount')
+      }
+      if (Math.abs((latestProforma.total_amount ?? 0) - totalAmount) > THRESHOLD) {
+        diffs.push('Total Amount')
+      }
+      if (diffs.length > 0) {
+        return {
+          mismatch: {
+            proforma: {
+              amount_before_vat: latestProforma.amount_before_vat ?? 0,
+              vat_amount: latestProforma.vat_amount ?? 0,
+              total_amount: latestProforma.total_amount ?? 0,
+            },
+            invoice: { amount_before_vat: subtotal, vat_amount: vatAmount, total_amount: totalAmount },
+            fields: diffs,
+          },
+        }
+      }
+    }
+  }
+
+  // If mismatch acknowledged, log it
+  if (input.mismatchAcknowledged && input.mismatchOverrideReason) {
+    const { data: latestProforma } = await supabase
+      .from('documents')
+      .select('id, amount_before_vat, vat_amount, total_amount, document_number')
+      .eq('campaign_id', input.campaignId)
+      .eq('type', 'proforma_invoice')
+      .neq('status', 'void')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (latestProforma) {
+      const fields: Array<{ field: string; proformaValue: number; invoiceValue: number }> = []
+      if (Math.abs((latestProforma.amount_before_vat ?? 0) - subtotal) > 0.01) {
+        fields.push({ field: 'amount_before_vat', proformaValue: latestProforma.amount_before_vat ?? 0, invoiceValue: subtotal })
+      }
+      if (Math.abs((latestProforma.total_amount ?? 0) - totalAmount) > 0.01) {
+        fields.push({ field: 'total_amount', proformaValue: latestProforma.total_amount ?? 0, invoiceValue: totalAmount })
+      }
+
+      if (fields.length > 0) {
+        await supabase.from('value_mismatch_log').insert(
+          fields.map((f) => ({
+            org_id: orgId,
+            campaign_id: input.campaignId,
+            proforma_document_id: latestProforma.id,
+            field_name: f.field,
+            proforma_value: f.proformaValue,
+            invoice_value: f.invoiceValue,
+            override_reason: input.mismatchOverrideReason,
+            overridden_by: session.user.id,
+          })),
+        )
+
+        // Notify admins
+        const { data: admins } = await supabase
+          .from('users')
+          .select('id')
+          .eq('org_id', orgId)
+          .eq('role', 'admin')
+
+        const { data: campaignData } = await supabase
+          .from('campaigns')
+          .select('tracker_id')
+          .eq('id', input.campaignId)
+          .maybeSingle()
+
+        if (admins && admins.length > 0) {
+          await supabase.from('notifications').insert(
+            admins.map((u) => ({
+              org_id: orgId,
+              campaign_id: input.campaignId,
+              user_id: u.id,
+              type: 'system',
+              title: `Mismatch override — ${campaignData?.tracker_id ?? input.campaignId}`,
+              message: `Invoice/Proforma value mismatch overridden. Reason: ${input.mismatchOverrideReason}`,
+            })),
+          )
+        }
+      }
+    }
+  }
 
   const docNumber = await getNextDocumentNumber(orgId, 'invoice')
   const issueDate = input.issueDateOverride ?? new Date().toISOString().split('T')[0]

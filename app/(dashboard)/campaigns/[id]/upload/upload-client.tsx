@@ -2,9 +2,9 @@
 
 import { useState, useRef, useTransition } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Upload, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, XCircle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Upload, FileSpreadsheet, FileText, CheckCircle2, AlertTriangle, XCircle, Loader2, ShieldAlert } from 'lucide-react'
 import { saveUploadRecordAction } from '@/lib/actions/upload'
-import type { DetectionConfidence, ExtractionMethod } from '@/types'
+import type { DetectionConfidence, ExtractionMethod, UserRole } from '@/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface ExtractionResponse {
@@ -113,11 +113,13 @@ export default function UploadClient({
   trackerID,
   campaignTitle,
   advertiser,
+  userRole,
 }: {
   campaignId: string
   trackerID: string
   campaignTitle: string
   advertiser: string
+  userRole: UserRole
 }) {
   // Step state
   type Step = 'pick' | 'uploading' | 'confirm' | 'saving'
@@ -136,6 +138,10 @@ export default function UploadClient({
   const [confirmedAmount, setConfirmedAmount] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [, startSaveTransition] = useTransition()
+
+  // Admin override (blocked by payments)
+  const [blockedByPayments, setBlockedByPayments] = useState(false)
+  const [overrideReason, setOverrideReason] = useState('')
 
   const ALLOWED_EXT = ['.pdf', '.xlsx', '.xls']
 
@@ -190,7 +196,30 @@ export default function UploadClient({
     }
   }
 
-  function handleConfirm() {
+  function buildSavePayload(adminOverride = false) {
+    if (!extraction) return null
+    const amount = parseFloat(confirmedAmount.replace(/[₦,\s]/g, ''))
+    return {
+      campaignId,
+      filePath: extraction.filePath,
+      fileUrl: extraction.fileUrl,
+      fileName: extraction.fileName,
+      fileSizeBytes: extraction.fileSizeBytes,
+      fileType: extraction.fileType,
+      extractionMethod: extraction.extractionMethod,
+      detectedAmountBeforeVat: extraction.detectedAmount,
+      confirmedAmountBeforeVat: amount,
+      detectionConfidence: extraction.confidence,
+      extractionResult: {
+        reasoning: extraction.reasoning,
+        pdfTextSnippet: extraction.pdfTextSnippet,
+      },
+      adminOverride,
+      adminOverrideReason: adminOverride ? overrideReason : undefined,
+    }
+  }
+
+  function handleConfirm(adminOverride = false) {
     if (!extraction) return
     const amount = parseFloat(confirmedAmount.replace(/[₦,\s]/g, ''))
     if (isNaN(amount) || amount <= 0) {
@@ -202,25 +231,17 @@ export default function UploadClient({
     setStep('saving')
 
     startSaveTransition(async () => {
-      const result = await saveUploadRecordAction({
-        campaignId,
-        filePath: extraction.filePath,
-        fileUrl: extraction.fileUrl,
-        fileName: extraction.fileName,
-        fileSizeBytes: extraction.fileSizeBytes,
-        fileType: extraction.fileType,
-        extractionMethod: extraction.extractionMethod,
-        detectedAmountBeforeVat: extraction.detectedAmount,
-        confirmedAmountBeforeVat: amount,
-        detectionConfidence: extraction.confidence,
-        extractionResult: {
-          reasoning: extraction.reasoning,
-          pdfTextSnippet: extraction.pdfTextSnippet,
-        },
-      })
+      const payload = buildSavePayload(adminOverride)
+      if (!payload) return
+      const result = await saveUploadRecordAction(payload)
       if (result && 'error' in result) {
-        setSaveError(result.error)
-        setStep('confirm')
+        if (result.error === 'BLOCKED_BY_PAYMENTS') {
+          setBlockedByPayments(true)
+          setStep('confirm')
+        } else {
+          setSaveError(result.error)
+          setStep('confirm')
+        }
       }
       // On success, redirect is handled by server action
     })
@@ -418,40 +439,78 @@ export default function UploadClient({
               </p>
             </div>
 
-            {saveError && (
+            {saveError && !blockedByPayments && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5" role="alert">
                 {saveError}
               </p>
             )}
 
-            <button
-              onClick={handleConfirm}
-              disabled={!canConfirm || step === 'saving'}
-              className="w-full min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: '#0D9488' }}
-            >
-              {step === 'saving' ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving…
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  Confirm &amp; Save
-                </>
-              )}
-            </button>
+            {/* Blocked by payments — admin override section */}
+            {blockedByPayments && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3.5 py-3.5 space-y-3">
+                <div className="flex items-start gap-2">
+                  <ShieldAlert className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-amber-800">
+                    <strong>Re-upload blocked:</strong> This campaign has existing payments. Re-uploading will flag current proforma/invoice documents as OUTDATED.
+                  </p>
+                </div>
+                {userRole === 'admin' ? (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-amber-900">
+                      Override reason (admin only) <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={overrideReason}
+                      onChange={(e) => setOverrideReason(e.target.value)}
+                      rows={2}
+                      placeholder="State why this re-upload is necessary despite existing payments…"
+                      className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm bg-white resize-none focus:outline-none focus:ring-2"
+                    />
+                    <button
+                      onClick={() => handleConfirm(true)}
+                      disabled={!overrideReason.trim() || step === 'saving'}
+                      className="w-full min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-50 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700"
+                    >
+                      Override &amp; Save
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-700">Contact an admin to override this restriction.</p>
+                )}
+              </div>
+            )}
 
-            {!canConfirm && (
-              <p className="text-xs text-center text-amber-600">
-                Enter a valid amount to proceed
-              </p>
+            {!blockedByPayments && (
+              <>
+                <button
+                  onClick={() => handleConfirm(false)}
+                  disabled={!canConfirm || step === 'saving'}
+                  className="w-full min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: '#0D9488' }}
+                >
+                  {step === 'saving' ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Confirm &amp; Save
+                    </>
+                  )}
+                </button>
+                {!canConfirm && (
+                  <p className="text-xs text-center text-amber-600">
+                    Enter a valid amount to proceed
+                  </p>
+                )}
+              </>
             )}
           </div>
 
           <button
-            onClick={() => { setStep('pick'); setExtraction(null); setSelectedFile(null); setUploadError(null) }}
+            onClick={() => { setStep('pick'); setExtraction(null); setSelectedFile(null); setUploadError(null); setBlockedByPayments(false) }}
             className="w-full min-h-[44px] rounded-lg px-4 py-2.5 text-sm font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 transition"
           >
             ← Re-upload different file

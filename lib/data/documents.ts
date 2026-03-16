@@ -15,6 +15,25 @@ export interface DocumentRow {
   sent_at: string | null
   created_at: string
   file_path: string | null
+  // Bundle columns (migration 020)
+  bundle_order: number | null
+  parent_document_id: string | null
+  voided_by: string | null
+  voided_at: string | null
+  void_reason: string | null
+  reviewed_at: string | null
+  reviewed_by: string | null
+}
+
+export interface UploadRecordRow {
+  id: string
+  campaign_id: string
+  file_name: string
+  file_url: string
+  file_type: string
+  file_size_bytes: number
+  confirmed_amount_before_vat: number
+  created_at: string
 }
 
 export interface SavedLineItem {
@@ -74,11 +93,46 @@ export async function getDocumentsByCampaign(campaignId: string): Promise<Docume
   const { data } = await supabase
     .from('documents')
     .select(
-      'id, type, status, document_number, amount_before_vat, agency_fee_amount, vat_amount, total_amount, currency, issue_date, due_date, sent_at, created_at, file_path',
+      'id, type, status, document_number, amount_before_vat, agency_fee_amount, vat_amount, total_amount, currency, issue_date, due_date, sent_at, created_at, file_path, bundle_order, parent_document_id, voided_by, voided_at, void_reason, reviewed_at, reviewed_by',
     )
     .eq('campaign_id', campaignId)
     .order('created_at', { ascending: false })
   return (data ?? []) as DocumentRow[]
+}
+
+export async function getLatestProformaForCampaign(
+  campaignId: string,
+): Promise<{ amount_before_vat: number; vat_amount: number; total_amount: number } | null> {
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from('documents')
+    .select('amount_before_vat, vat_amount, total_amount')
+    .eq('campaign_id', campaignId)
+    .eq('type', 'proforma_invoice')
+    .neq('status', 'void')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!data) return null
+  return {
+    amount_before_vat: data.amount_before_vat ?? 0,
+    vat_amount: data.vat_amount ?? 0,
+    total_amount: data.total_amount ?? 0,
+  }
+}
+
+export async function getLatestUploadRecord(
+  campaignId: string,
+): Promise<UploadRecordRow | null> {
+  const supabase = createAdminClient()
+  const { data } = await supabase
+    .from('upload_records')
+    .select('id, campaign_id, file_name, file_url, file_type, file_size_bytes, confirmed_amount_before_vat, created_at')
+    .eq('campaign_id', campaignId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data as UploadRecordRow | null
 }
 
 export async function getDocumentById(
