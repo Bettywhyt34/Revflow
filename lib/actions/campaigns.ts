@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
+import { notify } from '@/lib/notify'
 
 // Legacy action kept for backwards compatibility (FormData signature)
 export async function createCampaignAction(
@@ -70,13 +71,14 @@ export async function createCampaignWithClientAction(input: {
   }
 
   if (input.financeExecId) {
-    await supabase.from('notifications').insert({
-      org_id: session.user.orgId,
-      user_id: input.financeExecId,
-      campaign_id: campaign.id,
-      type: 'system',
+    await notify({
+      orgId: session.user.orgId,
+      campaignId: campaign.id,
+      type: 'approval_required',
       title: 'Campaign Assigned',
       message: `${campaign.tracker_id} — ${title} has been assigned to you.`,
+      actionPath: `/campaigns/${campaign.id}`,
+      targets: [{ userId: input.financeExecId }],
     })
   }
 

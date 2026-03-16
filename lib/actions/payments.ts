@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
+import { notifyRole } from '@/lib/notify'
 
 export interface LogPaymentInput {
   campaignId: string
@@ -256,12 +257,21 @@ export async function logPaymentAction(input: LogPaymentInput): Promise<LogPayme
     notifMessage = `${fmt(input.actualCashReceived)} cash${input.whtAmount > 0 ? ` + ${fmt(input.whtAmount)} WHT` : ''} from ${clientName}. Balance: ${fmt(balance)}`
   }
 
-  await supabase.from('notifications').insert({
-    org_id: orgId,
-    campaign_id: input.campaignId,
+  const actionPath = `/campaigns/${input.campaignId}`
+  // Notify admin + finance_exec with email
+  await notifyRole(orgId, 'admin', {
+    campaignId: input.campaignId,
     type: 'payment_received',
     title: notifTitle,
     message: notifMessage,
+    actionPath,
+  })
+  await notifyRole(orgId, 'finance_exec', {
+    campaignId: input.campaignId,
+    type: 'payment_received',
+    title: notifTitle,
+    message: notifMessage,
+    actionPath,
   })
 
   revalidatePath(`/campaigns/${input.campaignId}`)

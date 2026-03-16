@@ -19,19 +19,25 @@ export default async function SettingsPage() {
     getOrgSettingsWithDefaults(orgId),
     supabase
       .from('users')
-      .select('email_notifications')
+      .select('email_notifications, notification_prefs')
       .eq('id', session.user.id)
       .maybeSingle(),
     getOrgBankAccounts(orgId),
   ])
 
-  const emailNotifications = (userRow.data as { email_notifications: boolean } | null)
-    ?.email_notifications ?? true
+  const userData = userRow.data as {
+    email_notifications: boolean
+    notification_prefs: Record<string, boolean> | null
+  } | null
+
+  const emailNotifications = userData?.email_notifications ?? true
+  const notificationPrefs = userData?.notification_prefs ?? {}
 
   return (
     <SettingsClient
       orgSettings={orgSettings}
       emailNotifications={emailNotifications}
+      notificationPrefs={notificationPrefs}
       role={session.user.role as UserRole}
       bankAccounts={bankAccounts}
     />

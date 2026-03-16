@@ -5,7 +5,6 @@ import { Lock, Upload, Building2, FileText, Bell, Palette, Star, Pencil, Trash2,
 import {
   saveOrgProfileAction,
   saveDocSettingsAction,
-  saveNotificationPrefsAction,
   saveTemplateSettingsAction,
   createBankAccountAction,
   updateBankAccountAction,
@@ -13,6 +12,9 @@ import {
   setDefaultBankAccountAction,
   type BankAccountInput,
 } from '@/lib/actions/settings'
+import { saveNotificationPrefsAction } from '@/lib/actions/notifications'
+import { DEFAULT_NOTIF_PREFS } from '@/lib/data/notifications'
+import type { NotifPrefs } from '@/lib/data/notifications'
 import type { OrgSettings, OrgBankAccount, UserRole } from '@/types'
 import type { TemplateId } from '@/components/documents/template-types'
 import { TEMPLATE_LABELS, TEMPLATE_IDS } from '@/components/documents/template-registry'
@@ -738,41 +740,92 @@ function DocSettingsTab({
   )
 }
 
+// ── Toggle Switch ─────────────────────────────────────────────────────────────
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 ${
+        checked ? 'bg-teal-600' : 'bg-gray-200'
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform ${
+          checked ? 'translate-x-5' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  )
+}
+
+const NOTIF_TYPE_LABELS: { key: keyof NotifPrefs; label: string; description: string }[] = [
+  { key: 'payment_received',  label: 'Payment received',   description: 'When a payment is logged against a campaign.' },
+  { key: 'approval_required', label: 'Action required',    description: 'PO received, compliance to review, assignments.' },
+  { key: 'invoice_due',       label: 'Invoice due',        description: 'When an invoice is approaching or past its due date.' },
+  { key: 'compliance',        label: 'Compliance updates', description: 'Compliance confirmed, disputed, or resolved.' },
+  { key: 'chase',             label: 'Chase reminders',    description: 'Automated follow-up reminders from the chase engine.' },
+  { key: 'system',            label: 'System notices',     description: 'Campaign status changes, re-uploads, overrides.' },
+]
+
 // ── Notifications Tab ─────────────────────────────────────────────────────────
 function NotificationsTab({
-  emailNotifications: initial,
+  emailNotifications: initialEmail,
+  notificationPrefs: initialPrefs,
   role,
 }: {
   emailNotifications: boolean
+  notificationPrefs: Partial<NotifPrefs>
   role: UserRole
 }) {
-  const [emailNotif, setEmailNotif] = useState(initial)
+  const [emailNotif, setEmailNotif] = useState(initialEmail)
+  const [prefs, setPrefs] = useState<NotifPrefs>({ ...DEFAULT_NOTIF_PREFS, ...initialPrefs })
   const { run, banner, saving } = useSaveBanner()
+
+  function setType(key: keyof NotifPrefs, val: boolean) {
+    setPrefs((p) => ({ ...p, [key]: val }))
+  }
 
   return (
     <div className="space-y-6">
+      {/* Master email toggle */}
       <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-gray-200 bg-gray-50">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-gray-900">Receive email notifications</p>
+          <p className="text-sm font-semibold text-gray-900">Email notifications</p>
           <p className="text-xs text-gray-500">
-            Email alerts for overdue invoices, PO received, and payment confirmations.
+            Master toggle — disabling this stops all notification emails.
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={emailNotif}
-          onClick={() => setEmailNotif(!emailNotif)}
-          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 ${
-            emailNotif ? 'bg-teal-600' : 'bg-gray-200'
-          }`}
-        >
-          <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform ${
-              emailNotif ? 'translate-x-5' : 'translate-x-0'
-            }`}
-          />
-        </button>
+        <Toggle checked={emailNotif} onChange={setEmailNotif} />
       </div>
+
+      {/* Per-type email toggles */}
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-gray-700 mb-3">Notify me by email when…</p>
+        {NOTIF_TYPE_LABELS.map(({ key, label, description }) => (
+          <div
+            key={key}
+            className={`flex items-start justify-between gap-4 px-4 py-3 rounded-xl border ${
+              emailNotif ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-50'
+            }`}
+          >
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium text-gray-800">{label}</p>
+              <p className="text-xs text-gray-500">{description}</p>
+            </div>
+            <Toggle
+              checked={emailNotif ? prefs[key] : false}
+              onChange={(v) => setType(key, v)}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* In-app note */}
+      <p className="text-xs text-gray-400 bg-gray-50 rounded-lg px-4 py-3 border border-gray-100">
+        In-app notifications (bell icon) are always on and cannot be disabled.
+      </p>
 
       {role === 'admin' && (
         <p className="text-sm text-gray-500">
@@ -785,7 +838,7 @@ function NotificationsTab({
       <div className="flex items-center gap-4 pt-2">
         <button
           disabled={saving}
-          onClick={() => run(() => saveNotificationPrefsAction(emailNotif))}
+          onClick={() => run(() => saveNotificationPrefsAction(emailNotif, prefs))}
           className="min-h-[44px] px-6 py-2 rounded-lg text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 transition-colors disabled:opacity-60"
         >
           {saving ? 'Saving…' : 'Save preferences'}
@@ -864,11 +917,13 @@ type TabId = (typeof TABS)[number]['id']
 export default function SettingsClient({
   orgSettings,
   emailNotifications,
+  notificationPrefs,
   role,
   bankAccounts,
 }: {
   orgSettings: OrgSettings
   emailNotifications: boolean
+  notificationPrefs: Partial<NotifPrefs>
   role: UserRole
   bankAccounts: OrgBankAccount[]
 }) {
@@ -909,7 +964,11 @@ export default function SettingsClient({
           <DocSettingsTab s={orgSettings} role={role} bankAccounts={bankAccounts} />
         )}
         {activeTab === 'notifications' && (
-          <NotificationsTab emailNotifications={emailNotifications} role={role} />
+          <NotificationsTab
+            emailNotifications={emailNotifications}
+            notificationPrefs={notificationPrefs}
+            role={role}
+          />
         )}
         {activeTab === 'appearance' && <AppearanceTab s={orgSettings} role={role} />}
       </div>

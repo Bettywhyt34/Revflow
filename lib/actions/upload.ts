@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
+import { notify, notifyRole } from '@/lib/notify'
 import type { DetectionConfidence, ExtractionMethod } from '@/types'
 
 export async function saveUploadRecordAction(data: {
@@ -52,24 +53,21 @@ export async function saveUploadRecordAction(data: {
 
     if (hasPayments && data.adminOverride) {
       // Log override notification to admins + finance_exec
-      const { data: staffToNotify } = await supabase
-        .from('users')
-        .select('id')
-        .eq('org_id', orgId)
-        .in('role', ['admin', 'finance_exec'])
-
-      if (staffToNotify && staffToNotify.length > 0) {
-        await supabase.from('notifications').insert(
-          staffToNotify.map((u) => ({
-            org_id: orgId,
-            campaign_id: data.campaignId,
-            user_id: u.id,
-            type: 'system',
-            title: 'Plan re-uploaded (admin override)',
-            message: `Plan re-uploaded by admin with payments present. Reason: ${data.adminOverrideReason ?? 'No reason provided'}.`,
-          })),
-        )
-      }
+      const overrideMsg = `Plan re-uploaded by admin with payments present. Reason: ${data.adminOverrideReason ?? 'No reason provided'}.`
+      await notifyRole(orgId, 'admin', {
+        campaignId: data.campaignId,
+        type: 'system',
+        title: 'Plan re-uploaded (admin override)',
+        message: overrideMsg,
+        actionPath: `/campaigns/${data.campaignId}`,
+      })
+      await notifyRole(orgId, 'finance_exec', {
+        campaignId: data.campaignId,
+        type: 'system',
+        title: 'Plan re-uploaded (admin override)',
+        message: overrideMsg,
+        actionPath: `/campaigns/${data.campaignId}`,
+      })
     }
 
     // Flag CURRENT/DRAFT proforma_invoice and invoice docs as OUTDATED
@@ -87,24 +85,21 @@ export async function saveUploadRecordAction(data: {
         .in('id', docsToOutdate.map((d) => d.id))
 
       // Notify finance_exec + admin about OUTDATED docs
-      const { data: staffToNotify } = await supabase
-        .from('users')
-        .select('id')
-        .eq('org_id', orgId)
-        .in('role', ['admin', 'finance_exec'])
-
-      if (staffToNotify && staffToNotify.length > 0) {
-        await supabase.from('notifications').insert(
-          staffToNotify.map((u) => ({
-            org_id: orgId,
-            campaign_id: data.campaignId,
-            user_id: u.id,
-            type: 'system',
-            title: 'Plan updated — documents flagged OUTDATED',
-            message: `Plan re-uploaded. ${docsToOutdate.length} document(s) flagged OUTDATED. Review required.`,
-          })),
-        )
-      }
+      const outdatedMsg = `Plan re-uploaded. ${docsToOutdate.length} document(s) flagged OUTDATED. Review required.`
+      await notifyRole(orgId, 'admin', {
+        campaignId: data.campaignId,
+        type: 'system',
+        title: 'Plan updated — documents flagged OUTDATED',
+        message: outdatedMsg,
+        actionPath: `/campaigns/${data.campaignId}`,
+      })
+      await notifyRole(orgId, 'finance_exec', {
+        campaignId: data.campaignId,
+        type: 'system',
+        title: 'Plan updated — documents flagged OUTDATED',
+        message: outdatedMsg,
+        actionPath: `/campaigns/${data.campaignId}`,
+      })
     }
   }
 

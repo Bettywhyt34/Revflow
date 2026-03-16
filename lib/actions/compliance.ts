@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
+import { notifyRole } from '@/lib/notify'
 import type { DetectionConfidence, ExtractionMethod } from '@/types'
 
 export interface ConfirmComplianceInput {
@@ -249,48 +250,33 @@ export async function confirmComplianceAction(
     }).format(n)
 
   const pctStr = `${(compliancePct * 100).toFixed(1)}%`
+  const complianceMsg = `Compliance %: ${pctStr}. Final Billable: ${fmt(finalBillable)}.${writeOff > 0 ? ` Write-Off: ${fmt(writeOff)}` : ''}`
+  const complianceTitle = `Compliance confirmed — ${campaign.tracker_id}`
+  const actionPath = `/campaigns/${input.campaignId}`
 
-  // Notify finance execs
-  const { data: financeExecs } = await supabase
-    .from('users')
-    .select('id')
-    .eq('org_id', orgId)
-    .eq('role', 'finance_exec')
+  await notifyRole(orgId, 'finance_exec', {
+    campaignId: input.campaignId,
+    type: 'compliance',
+    title: complianceTitle,
+    message: complianceMsg,
+    actionPath,
+  })
+  await notifyRole(orgId, 'admin', {
+    campaignId: input.campaignId,
+    type: 'compliance',
+    title: complianceTitle,
+    message: complianceMsg,
+    actionPath,
+  })
 
-  const notifBase = {
-    org_id: orgId,
-    campaign_id: input.campaignId,
-    type: 'compliance' as const,
-    title: `Compliance confirmed — ${campaign.tracker_id}`,
-    message: `Compliance %: ${pctStr}. Final Billable: ${fmt(finalBillable)}.${writeOff > 0 ? ` Write-Off: ${fmt(writeOff)}` : ''}`,
-  }
-
-  const notifList = [
-    ...(financeExecs ?? []).map((u) => ({ ...notifBase, user_id: u.id })),
-    { ...notifBase, user_id: null },
-  ]
-  await supabase.from('notifications').insert(notifList)
-
-  // Notify admins of write-off
   if (writeOff > 0) {
-    const { data: admins } = await supabase
-      .from('users')
-      .select('id')
-      .eq('org_id', orgId)
-      .eq('role', 'admin')
-
-    if (admins && admins.length > 0) {
-      await supabase.from('notifications').insert(
-        admins.map((u) => ({
-          org_id: orgId,
-          campaign_id: input.campaignId,
-          user_id: u.id,
-          type: 'compliance' as const,
-          title: `Write-off — ${campaign.tracker_id}`,
-          message: `Write-off of ${fmt(writeOff)} on ${campaign.title} (${campaign.advertiser})`,
-        })),
-      )
-    }
+    await notifyRole(orgId, 'admin', {
+      campaignId: input.campaignId,
+      type: 'compliance',
+      title: `Write-off — ${campaign.tracker_id}`,
+      message: `Write-off of ${fmt(writeOff)} on ${campaign.title} (${campaign.advertiser})`,
+      actionPath,
+    })
   }
 
   revalidatePath(`/campaigns/${input.campaignId}`)
@@ -356,30 +342,23 @@ export async function raiseDisputeAction(
     .eq('org_id', orgId)
 
   // Notify finance execs + admins
-  const { data: staffToNotify } = await supabase
-    .from('users')
-    .select('id')
-    .eq('org_id', orgId)
-    .in('role', ['admin', 'finance_exec'])
-
-  await supabase.from('notifications').insert([
-    ...(staffToNotify ?? []).map((u) => ({
-      org_id: orgId,
-      campaign_id: input.campaignId,
-      user_id: u.id,
-      type: 'compliance' as const,
-      title: `Dispute raised — ${campaign.tracker_id}`,
-      message: `Dispute on compliance for ${campaign.title}. Review required. Reason: ${input.reason.trim()}`,
-    })),
-    {
-      org_id: orgId,
-      campaign_id: input.campaignId,
-      user_id: null,
-      type: 'compliance' as const,
-      title: `Dispute raised — ${campaign.tracker_id}`,
-      message: `Compliance dispute on ${campaign.title}. Review required.`,
-    },
-  ])
+  const disputeMsg = `Dispute on compliance for ${campaign.title}. Review required. Reason: ${input.reason.trim()}`
+  const disputeTitle = `Dispute raised — ${campaign.tracker_id}`
+  const disputePath = `/campaigns/${input.campaignId}`
+  await notifyRole(orgId, 'admin', {
+    campaignId: input.campaignId,
+    type: 'compliance',
+    title: disputeTitle,
+    message: disputeMsg,
+    actionPath: disputePath,
+  })
+  await notifyRole(orgId, 'finance_exec', {
+    campaignId: input.campaignId,
+    type: 'compliance',
+    title: disputeTitle,
+    message: disputeMsg,
+    actionPath: disputePath,
+  })
 
   revalidatePath(`/campaigns/${input.campaignId}`)
   return { disputeId: dispute.id }
@@ -482,13 +461,20 @@ export async function resolveDisputeAction(
       ])
     }
 
-    await supabase.from('notifications').insert({
-      org_id: orgId,
-      campaign_id: input.campaignId,
-      user_id: null,
-      type: 'compliance' as const,
+    const resolvedMsg = `Agreed amount: ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: campaign.currency ?? 'NGN', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(input.agreedAmount)}`
+    await notifyRole(orgId, 'admin', {
+      campaignId: input.campaignId,
+      type: 'compliance',
       title: `Dispute resolved — ${campaign.tracker_id}`,
-      message: `Agreed amount: ${new Intl.NumberFormat('en-NG', { style: 'currency', currency: campaign.currency ?? 'NGN', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(input.agreedAmount)}`,
+      message: resolvedMsg,
+      actionPath: `/campaigns/${input.campaignId}`,
+    })
+    await notifyRole(orgId, 'finance_exec', {
+      campaignId: input.campaignId,
+      type: 'compliance',
+      title: `Dispute resolved — ${campaign.tracker_id}`,
+      message: resolvedMsg,
+      actionPath: `/campaigns/${input.campaignId}`,
     })
   }
 

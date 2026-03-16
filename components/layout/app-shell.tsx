@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { UserRole } from '@/types'
 import { OrgSettingsProvider, useOrgSettings, type OrgBrandState } from './org-settings-context'
+import NotificationBell from '@/components/notifications/notification-bell'
 
 // ── Nav items ────────────────────────────────────────────────────────────────
 // allowedRoles: null = all authenticated roles; otherwise restrict to listed roles
@@ -122,14 +123,17 @@ function SidebarContent({
             {orgName || 'Revflow'}
           </span>
         </div>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="lg:hidden p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        )}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {!onClose && <NotificationBell primaryColor={primaryColor} />}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="lg:hidden p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Nav links */}
@@ -237,6 +241,7 @@ function TopBar({
 }: {
   user: { name?: string | null; role: UserRole | null }
   onMenuOpen: () => void
+  primaryColor?: string
 }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -282,14 +287,13 @@ function TopBar({
         <LogoMark size="sm" />
         <span className="text-sm font-semibold text-gray-900 truncate">{pageTitle}</span>
       </div>
+      <NotificationBell primaryColor={primaryColor} />
       <button
         onClick={handleSignOut}
         className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
       >
         <LogOut className="h-4 w-4" />
       </button>
-      {/* suppress unused warning */}
-      <span style={{ color: primaryColor }} className="hidden" />
     </header>
   )
 }
