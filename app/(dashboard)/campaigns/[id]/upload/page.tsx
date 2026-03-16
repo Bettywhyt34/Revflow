@@ -14,7 +14,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
   const session = await auth()
   const role = session!.user.role as UserRole
 
-  if (role !== 'admin' && role !== 'planner') redirect(`/campaigns/${id}`)
+  if (role !== 'admin' && role !== 'planner' && role !== 'finance_exec') redirect(`/campaigns/${id}`)
 
   const campaign = await getCampaignById(id, session!.user.orgId)
   if (!campaign) notFound()

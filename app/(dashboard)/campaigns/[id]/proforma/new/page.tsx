@@ -18,7 +18,7 @@ export default async function NewProformaPage({
   const session = await auth()
   const role = session!.user.role as UserRole
 
-  if (role !== 'admin' && role !== 'planner') redirect(`/campaigns/${id}`)
+  if (role !== 'admin' && role !== 'finance_exec') redirect(`/campaigns/${id}`)
 
   const [campaign, orgSettings] = await Promise.all([
     getCampaignById(id, session!.user.orgId),
