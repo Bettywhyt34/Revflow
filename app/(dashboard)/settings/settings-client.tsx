@@ -6,6 +6,7 @@ import {
   saveOrgProfileAction,
   saveDocSettingsAction,
   saveNotificationPrefsAction,
+  saveTemplateSettingsAction,
   createBankAccountAction,
   updateBankAccountAction,
   deleteBankAccountAction,
@@ -13,6 +14,9 @@ import {
   type BankAccountInput,
 } from '@/lib/actions/settings'
 import type { OrgSettings, OrgBankAccount, UserRole } from '@/types'
+import type { TemplateId } from '@/components/documents/template-types'
+import { TEMPLATE_LABELS, TEMPLATE_IDS } from '@/components/documents/template-registry'
+import TemplateThumbnail from '@/components/documents/template-thumbnail'
 import { useOrgSettings } from '@/components/layout/org-settings-context'
 
 // ── Color Picker ──────────────────────────────────────────────────────────────
@@ -539,6 +543,48 @@ function OrgProfileTab({
   )
 }
 
+// ── Template Selector ─────────────────────────────────────────────────────────
+function TemplateSelector({
+  label,
+  value,
+  onChange,
+  primaryColor,
+}: {
+  label: string
+  value: TemplateId
+  onChange: (v: TemplateId) => void
+  primaryColor: string
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm font-medium text-gray-700">{label}</label>
+      <div className="flex gap-3 flex-wrap">
+        {TEMPLATE_IDS.map((id) => {
+          const active = value === id
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onChange(id)}
+              className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all ${
+                active
+                  ? 'border-teal-500 bg-teal-50'
+                  : 'border-gray-200 hover:border-gray-300 bg-white'
+              }`}
+            >
+              <TemplateThumbnail templateId={id} primaryColor={primaryColor} active={active} />
+              <span className={`text-[11px] font-medium ${active ? 'text-teal-700' : 'text-gray-600'}`}>
+                {id === '1' ? 'Classic' : id === '2' ? 'Minimal' : 'Corporate'}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <p className="text-xs text-gray-400">{TEMPLATE_LABELS[value]}</p>
+    </div>
+  )
+}
+
 // ── Document Settings Tab ─────────────────────────────────────────────────────
 function DocSettingsTab({
   s,
@@ -552,6 +598,15 @@ function DocSettingsTab({
   const [prefix, setPrefix] = useState(s.invoice_prefix)
   const [paymentTerms, setPaymentTerms] = useState(s.payment_terms)
   const [agencyFee, setAgencyFee] = useState(String(s.agency_fee_pct))
+  const [proformaTemplate, setProformaTemplate] = useState<TemplateId>(
+    (s.default_proforma_template as TemplateId) ?? '1',
+  )
+  const [invoiceTemplate, setInvoiceTemplate] = useState<TemplateId>(
+    (s.default_invoice_template as TemplateId) ?? '1',
+  )
+  const [templateSaving, setTemplateSaving] = useState(false)
+  const [templateBannerState, setTemplateBannerState] = useState<'idle' | 'ok' | 'error'>('idle')
+  const { primaryColor } = useOrgSettings()
   const { run, banner, saving } = useSaveBanner()
 
   const year = new Date().getFullYear()
@@ -616,6 +671,57 @@ function DocSettingsTab({
             {saving ? 'Saving…' : 'Save changes'}
           </button>
           {banner}
+        </div>
+
+        {/* Document Templates section */}
+        <div className="pt-2 border-t border-gray-100 space-y-5">
+          <div>
+            <p className="text-sm font-semibold text-gray-700">Document Templates</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Choose the default layout for new proforma invoices and invoices.
+              This can be overridden per document in the builder.
+            </p>
+          </div>
+          <TemplateSelector
+            label="Default Proforma Template"
+            value={proformaTemplate}
+            onChange={setProformaTemplate}
+            primaryColor={primaryColor}
+          />
+          <TemplateSelector
+            label="Default Invoice Template"
+            value={invoiceTemplate}
+            onChange={setInvoiceTemplate}
+            primaryColor={primaryColor}
+          />
+          <div className="flex items-center gap-4">
+            <button
+              disabled={templateSaving}
+              onClick={async () => {
+                setTemplateSaving(true)
+                const result = await saveTemplateSettingsAction({
+                  default_proforma_template: proformaTemplate,
+                  default_invoice_template: invoiceTemplate,
+                })
+                setTemplateSaving(false)
+                setTemplateBannerState(result.error ? 'error' : 'ok')
+                setTimeout(() => setTemplateBannerState('idle'), 3000)
+              }}
+              className="min-h-[44px] px-6 py-2 rounded-lg text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 transition-colors disabled:opacity-60"
+            >
+              {templateSaving ? 'Saving…' : 'Save templates'}
+            </button>
+            {templateBannerState === 'ok' && (
+              <span className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+                Saved!
+              </span>
+            )}
+            {templateBannerState === 'error' && (
+              <span className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                Failed to save.
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Bank Accounts section */}

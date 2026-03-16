@@ -37,6 +37,7 @@ export interface ProformaDocument extends DocumentRow {
   sent_by: string | null
   notes: string | null
   terms: string | null
+  template_id: string
   created_by: string
   campaign: {
     id: string

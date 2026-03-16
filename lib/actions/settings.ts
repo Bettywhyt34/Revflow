@@ -120,6 +120,43 @@ export async function saveNotificationPrefsAction(
   return { ok: true }
 }
 
+// ── Template Settings ────────────────────────────────────────────────────────
+
+export interface TemplateSettingsInput {
+  default_proforma_template: string
+  default_invoice_template: string
+}
+
+export async function saveTemplateSettingsAction(
+  input: TemplateSettingsInput,
+): Promise<{ error?: string; ok?: true }> {
+  const session = await auth()
+  if (!session?.user?.id) return { error: 'Not authenticated.' }
+  if (session.user.role !== 'admin') return { error: 'Admin access required.' }
+
+  const supabase = createAdminClient()
+  const { error } = await supabase.from('org_settings').upsert(
+    {
+      org_id: session.user.orgId,
+      default_proforma_template: ['1', '2', '3'].includes(input.default_proforma_template)
+        ? input.default_proforma_template
+        : '1',
+      default_invoice_template: ['1', '2', '3'].includes(input.default_invoice_template)
+        ? input.default_invoice_template
+        : '1',
+    },
+    { onConflict: 'org_id' },
+  )
+
+  if (error) {
+    console.error('saveTemplateSettingsAction:', error)
+    return { error: 'Failed to save template settings.' }
+  }
+
+  revalidatePath('/settings')
+  return { ok: true }
+}
+
 // ── Bank Account CRUD (admin only) ───────────────────────────────────────────
 
 export interface BankAccountInput {

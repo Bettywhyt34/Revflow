@@ -13,6 +13,8 @@ const DEFAULTS: Omit<OrgSettings, 'id' | 'org_id' | 'created_at' | 'updated_at'>
   invoice_prefix: 'INV',
   payment_terms: 'Net 30',
   agency_fee_pct: 10,
+  default_proforma_template: '1',
+  default_invoice_template: '1',
 }
 
 export async function getOrgSettings(orgId: string): Promise<OrgSettings | null> {

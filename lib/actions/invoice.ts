@@ -71,6 +71,7 @@ export interface CreateInvoiceInput {
   paymentTermsDays: number
   notes: string
   mpoFilePath?: string | null   // path in Supabase Storage if uploaded
+  templateId?: string           // '1' | '2' | '3', defaults to '1'
 }
 
 export async function createInvoiceAction(
@@ -136,6 +137,7 @@ export async function createInvoiceAction(
       line_items: input.lineItems,
       invoice_subject: input.invoiceSubject || null,
       file_path: input.mpoFilePath ?? null,
+      template_id: input.templateId ?? '1',
       created_by: session.user.id,
     })
     .select('id')

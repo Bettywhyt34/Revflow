@@ -9,6 +9,10 @@ import { markDocumentAsSentAction, deleteDocumentAction } from '@/lib/actions/pr
 import { EmailChips } from '@/components/clients/client-form'
 import SendDialog from '@/components/documents/send-dialog'
 import { useOrgSettings } from '@/components/layout/org-settings-context'
+import TemplateT2HTML from '@/components/documents/template-t2-html'
+import TemplateT3HTML from '@/components/documents/template-t3-html'
+import TemplateThumbnail from '@/components/documents/template-thumbnail'
+import type { TemplateId, DocumentTemplateData } from '@/components/documents/template-types'
 
 const VAT_RATE = 0.075
 
@@ -99,6 +103,7 @@ export default function InvoiceForm({
   clientCustomerId,
   clientPaymentTermsDays,
   poNumber,
+  defaultTemplateId = '1',
 }: {
   campaignId: string
   campaign: Campaign
@@ -109,8 +114,12 @@ export default function InvoiceForm({
   clientCustomerId?: string | null
   clientPaymentTermsDays?: number | null
   poNumber?: string | null
+  defaultTemplateId?: string
 }) {
   const { primaryColor, logoUrl: orgLogoUrl, orgName } = useOrgSettings()
+  const [templateId, setTemplateId] = useState<TemplateId>(
+    (defaultTemplateId as TemplateId) ?? '1',
+  )
   const [isPending, startTransition] = useTransition()
   const [savedDocId, setSavedDocId] = useState<string | null>(null)
   const [savedDocNumber, setSavedDocNumber] = useState<string | null>(null)
@@ -222,6 +231,7 @@ export default function InvoiceForm({
       paymentTermsDays,
       notes,
       mpoFilePath,
+      templateId,
     }
   }
 
@@ -536,7 +546,70 @@ export default function InvoiceForm({
 
         {/* ── Right: Live Preview ── */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Live Preview</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Live Preview</h2>
+            {/* Template selector */}
+            <div className="flex gap-1.5">
+              {(['1', '2', '3'] as TemplateId[]).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTemplateId(id)}
+                  title={id === '1' ? 'Classic' : id === '2' ? 'Minimal' : 'Corporate'}
+                  className={`p-1.5 rounded-lg border transition-all ${
+                    templateId === id
+                      ? 'border-teal-500 bg-teal-50'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <TemplateThumbnail templateId={id} primaryColor={pc} active={templateId === id} />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Templates 2 & 3 */}
+          {(templateId === '2' || templateId === '3') && (() => {
+            const payTermsLabel = paymentTermsDays === 0
+              ? 'Due on Receipt'
+              : `Net ${paymentTermsDays}`
+            const tData: DocumentTemplateData = {
+              orgName,
+              orgAddress: null,
+              logoUrl: orgLogoUrl ?? null,
+              primaryColor: pc,
+              documentType: 'invoice',
+              documentTitle: 'INVOICE',
+              invoiceNumber: savedDocNumber ?? '',
+              issueDate: issueDate ? fmtDate(issueDate) : '—',
+              recipientName,
+              recipientAddress: clientAddress ?? null,
+              customerId: clientCustomerId ?? '—',
+              invoiceSubject: subject,
+              currency: campaign.currency,
+              lineItems: parsedItems.map((i) => ({
+                qty: i.qtyNum,
+                description: i.description,
+                unitPrice: i.priceNum,
+                lineTotal: i.lineTotalNum,
+              })),
+              subtotal,
+              vatAmount,
+              totalAmount,
+              notes: notes || null,
+              amountInWords,
+              dueDate: dueDate ? fmtDate(dueDate) : '—',
+              paymentTerms: payTermsLabel,
+              poNumber: poNumber ?? null,
+              balanceDue: totalAmount,
+            }
+            return templateId === '2'
+              ? <TemplateT2HTML data={tData} />
+              : <TemplateT3HTML data={tData} />
+          })()}
+
+          {/* Template 1 — classic inline preview */}
+          {templateId === '1' && (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden text-xs font-sans select-none">
 
             {/* ── Header ── */}
@@ -656,6 +729,7 @@ export default function InvoiceForm({
             </div>
 
           </div>
+          )}
         </div>
       </div>
 

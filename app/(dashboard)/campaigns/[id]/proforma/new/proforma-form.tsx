@@ -9,6 +9,10 @@ import { EmailChips } from '@/components/clients/client-form'
 import SendDialog from '@/components/documents/send-dialog'
 import { useOrgSettings } from '@/components/layout/org-settings-context'
 import ProformaHTMLPreview from '@/components/documents/proforma-html-preview'
+import TemplateT2HTML from '@/components/documents/template-t2-html'
+import TemplateT3HTML from '@/components/documents/template-t3-html'
+import TemplateThumbnail from '@/components/documents/template-thumbnail'
+import type { TemplateId, DocumentTemplateData } from '@/components/documents/template-types'
 
 const VAT_RATE = 0.075
 
@@ -118,6 +122,7 @@ export default function ProformaForm({
   clientAddress,
   clientCustomerId,
   clientPaymentTermsDays,
+  defaultTemplateId = '1',
 }: {
   campaignId: string
   campaign: Campaign
@@ -127,8 +132,12 @@ export default function ProformaForm({
   clientAddress?: string | null
   clientCustomerId?: string | null
   clientPaymentTermsDays?: number | null
+  defaultTemplateId?: string
 }) {
   const { primaryColor, logoUrl: orgLogoUrl, orgName } = useOrgSettings()
+  const [templateId, setTemplateId] = useState<TemplateId>(
+    (defaultTemplateId as TemplateId) ?? '1',
+  )
   const [isPending, startTransition] = useTransition()
   const [savedDocId, setSavedDocId] = useState<string | null>(null)
   const [savedDocNumber, setSavedDocNumber] = useState<string | null>(null)
@@ -249,6 +258,7 @@ export default function ProformaForm({
       issueDateOverride: issueDate,
       paymentTermsDays,
       notes,
+      templateId,
     }
   }
 
@@ -596,31 +606,84 @@ export default function ProformaForm({
 
         {/* ── Right: Live Preview ── */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-            Live Preview
-          </h2>
-          <ProformaHTMLPreview
-            orgName={orgName}
-            orgLogoUrl={orgLogoUrl}
-            primaryColor={primaryColor}
-            invoiceNumber={savedDocNumber ?? ''}
-            issueDate={issueDate ? fmtDate(issueDate) : '—'}
-            recipientName={recipientName}
-            recipientAddress={clientAddress ?? null}
-            customerId={clientCustomerId ?? '—'}
-            invoiceSubject={subject}
-            currency={campaign.currency}
-            lineItems={parsedItems.map((i) => ({
-              qty: i.qtyNum,
-              description: i.description,
-              unitPrice: i.priceNum,
-              lineTotal: i.lineTotalNum,
-            }))}
-            vatAmount={vatAmount}
-            totalAmount={totalAmount}
-            amountInWords={amountInWords}
-            notes={notes}
-          />
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+              Live Preview
+            </h2>
+            {/* Template selector */}
+            <div className="flex gap-1.5">
+              {(['1', '2', '3'] as TemplateId[]).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTemplateId(id)}
+                  title={id === '1' ? 'Classic' : id === '2' ? 'Minimal' : 'Corporate'}
+                  className={`p-1.5 rounded-lg border transition-all ${
+                    templateId === id
+                      ? 'border-teal-500 bg-teal-50'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <TemplateThumbnail templateId={id} primaryColor={primaryColor} active={templateId === id} />
+                </button>
+              ))}
+            </div>
+          </div>
+          {templateId === '1' && (
+            <ProformaHTMLPreview
+              orgName={orgName}
+              orgLogoUrl={orgLogoUrl}
+              primaryColor={primaryColor}
+              invoiceNumber={savedDocNumber ?? ''}
+              issueDate={issueDate ? fmtDate(issueDate) : '—'}
+              recipientName={recipientName}
+              recipientAddress={clientAddress ?? null}
+              customerId={clientCustomerId ?? '—'}
+              invoiceSubject={subject}
+              currency={campaign.currency}
+              lineItems={parsedItems.map((i) => ({
+                qty: i.qtyNum,
+                description: i.description,
+                unitPrice: i.priceNum,
+                lineTotal: i.lineTotalNum,
+              }))}
+              vatAmount={vatAmount}
+              totalAmount={totalAmount}
+              amountInWords={amountInWords}
+              notes={notes}
+            />
+          )}
+          {(templateId === '2' || templateId === '3') && (() => {
+            const t2data: DocumentTemplateData = {
+              orgName,
+              orgAddress: null,
+              logoUrl: orgLogoUrl ?? null,
+              primaryColor,
+              documentType: 'proforma',
+              documentTitle: 'PROFORMA INVOICE',
+              invoiceNumber: savedDocNumber ?? '',
+              issueDate: issueDate ? fmtDate(issueDate) : '—',
+              recipientName,
+              recipientAddress: clientAddress ?? null,
+              customerId: clientCustomerId ?? '—',
+              invoiceSubject: subject,
+              currency: campaign.currency,
+              lineItems: parsedItems.map((i) => ({
+                qty: i.qtyNum,
+                description: i.description,
+                unitPrice: i.priceNum,
+                lineTotal: i.lineTotalNum,
+              })),
+              subtotal,
+              vatAmount,
+              totalAmount,
+              notes: notes || null,
+              amountInWords,
+            }
+            return templateId === '2'
+              ? <TemplateT2HTML data={t2data} />
+              : <TemplateT3HTML data={t2data} />
+          })()}
         </div>
       </div>
 

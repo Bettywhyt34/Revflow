@@ -34,6 +34,8 @@ export interface OrgSettings {
   invoice_prefix: string
   payment_terms: string
   agency_fee_pct: number
+  default_proforma_template: string
+  default_invoice_template: string
   created_at: string
   updated_at: string
 }

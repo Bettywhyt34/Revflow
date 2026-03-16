@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import { getCampaignById } from '@/lib/data/campaigns'
+import { getOrgSettingsWithDefaults } from '@/lib/data/settings'
 import type { UserRole } from '@/types'
 import ProformaForm from './proforma-form'
 
@@ -19,7 +20,10 @@ export default async function NewProformaPage({
 
   if (role !== 'admin' && role !== 'planner') redirect(`/campaigns/${id}`)
 
-  const campaign = await getCampaignById(id, session!.user.orgId)
+  const [campaign, orgSettings] = await Promise.all([
+    getCampaignById(id, session!.user.orgId),
+    getOrgSettingsWithDefaults(session!.user.orgId),
+  ])
   if (!campaign) notFound()
 
   if (campaign.status !== 'plan_submitted') redirect(`/campaigns/${id}`)
@@ -57,6 +61,7 @@ export default async function NewProformaPage({
         clientAddress={client?.address ?? null}
         clientCustomerId={client?.customer_id ?? null}
         clientPaymentTermsDays={parsePaymentTermsDays(campaign.client?.payment_terms)}
+        defaultTemplateId={orgSettings.default_proforma_template ?? '1'}
       />
     </div>
   )

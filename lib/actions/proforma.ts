@@ -90,6 +90,7 @@ export interface CreateProformaInput {
   issueDateOverride?: string // YYYY-MM-DD, defaults to today
   paymentTermsDays: number   // e.g. 30
   notes: string
+  templateId?: string        // '1' | '2' | '3', defaults to '1'
 }
 
 export async function createProformaAction(
@@ -154,6 +155,7 @@ export async function createProformaAction(
       terms: `Payment due within ${input.paymentTermsDays} days of invoice date.`,
       line_items: input.lineItems,
       invoice_subject: input.invoiceSubject || null,
+      template_id: input.templateId ?? '1',
       created_by: session.user.id,
     })
     .select('id')
