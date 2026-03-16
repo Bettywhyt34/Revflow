@@ -20,13 +20,20 @@ import type { UserRole } from '@/types'
 import { OrgSettingsProvider, useOrgSettings, type OrgBrandState } from './org-settings-context'
 
 // ── Nav items ────────────────────────────────────────────────────────────────
-const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard',   icon: LayoutDashboard, active: true,  adminOnly: false },
-  { label: 'Campaigns', href: '/campaigns',   icon: Briefcase,       active: true,  adminOnly: false },
-  { label: 'Clients',   href: '/clients',     icon: Building2,       active: true,  adminOnly: false },
-  { label: 'Reports',   href: '/reports',     icon: BarChart3,       active: true,  adminOnly: false },
-  { label: 'Users',     href: '/admin/users', icon: Users,           active: true,  adminOnly: true  },
-  { label: 'Settings',  href: '/settings',    icon: Settings,        active: true,  adminOnly: false },
+// allowedRoles: null = all authenticated roles; otherwise restrict to listed roles
+const NAV_ITEMS: {
+  label: string
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  active: boolean
+  allowedRoles: UserRole[] | null
+}[] = [
+  { label: 'Dashboard', href: '/dashboard',   icon: LayoutDashboard, active: true, allowedRoles: null },
+  { label: 'Campaigns', href: '/campaigns',   icon: Briefcase,       active: true, allowedRoles: null },
+  { label: 'Clients',   href: '/clients',     icon: Building2,       active: true, allowedRoles: ['admin', 'finance_exec', 'planner'] },
+  { label: 'Reports',   href: '/reports',     icon: BarChart3,       active: true, allowedRoles: ['admin', 'finance_exec'] },
+  { label: 'Users',     href: '/admin/users', icon: Users,           active: true, allowedRoles: ['admin'] },
+  { label: 'Settings',  href: '/settings',    icon: Settings,        active: true, allowedRoles: ['admin', 'finance_exec'] },
 ]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -51,8 +58,14 @@ function initials(name: string | null | undefined): string {
     .toUpperCase()
 }
 
+function isNavAllowed(item: (typeof NAV_ITEMS)[0], role: UserRole | null): boolean {
+  if (!item.allowedRoles) return true
+  if (!role) return false
+  return item.allowedRoles.includes(role)
+}
+
 function getBottomTabs(role: UserRole | null) {
-  return NAV_ITEMS.filter((n) => n.active && (!n.adminOnly || role === 'admin'))
+  return NAV_ITEMS.filter((n) => n.active && isNavAllowed(n, role))
 }
 
 // ── Logo mark — shows org logo or branded "R" fallback ──────────────────────
@@ -121,7 +134,7 @@ function SidebarContent({
 
       {/* Nav links */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.filter((item) => !item.adminOnly || user.role === 'admin').map((item) => {
+        {NAV_ITEMS.filter((item) => isNavAllowed(item, user.role)).map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           const Icon = item.icon
 

@@ -100,7 +100,7 @@ export async function createProformaAction(
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
   const { role, orgId } = session.user
-  if (role !== 'admin' && role !== 'planner') return { error: 'Insufficient permissions.' }
+  if (role !== 'admin' && role !== 'finance_exec') return { error: 'Insufficient permissions.' }
 
   const supabase = createAdminClient()
 
@@ -245,7 +245,7 @@ export async function sendProformaAction(
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
   const { role, orgId } = session.user
-  if (role !== 'admin' && role !== 'planner') return { error: 'Insufficient permissions.' }
+  if (role !== 'admin' && role !== 'finance_exec') return { error: 'Insufficient permissions.' }
 
   const supabase = createAdminClient()
 

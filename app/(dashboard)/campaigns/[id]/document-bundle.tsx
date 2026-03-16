@@ -268,8 +268,8 @@ export default function DocumentBundle({
             const isCurrent = doc.status === 'current'
             const canVoid = userRole === 'admin' && doc.status !== 'void'
             const canReview = (userRole === 'admin' || userRole === 'finance_exec') && isOutdated
-            const canEdit = ['admin', 'finance_exec', 'planner'].includes(userRole)
-            const canClone = ['admin', 'finance_exec', 'planner'].includes(userRole) && (doc.type === 'proforma_invoice' || doc.type === 'invoice')
+            const canEdit = ['admin', 'finance_exec'].includes(userRole)
+            const canClone = ['admin', 'finance_exec'].includes(userRole) && (doc.type === 'proforma_invoice' || doc.type === 'invoice')
             const needsVersion = (isCurrent || isOutdated) && canEdit
 
             return (

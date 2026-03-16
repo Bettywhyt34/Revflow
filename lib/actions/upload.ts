@@ -25,7 +25,7 @@ export async function saveUploadRecordAction(data: {
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
   const { role, orgId, id: userId } = session.user
-  if (role !== 'admin' && role !== 'planner') return { error: 'Insufficient permissions.' }
+  if (role !== 'admin' && role !== 'planner' && role !== 'finance_exec') return { error: 'Insufficient permissions.' }
 
   const supabase = createAdminClient()
 

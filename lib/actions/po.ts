@@ -26,7 +26,7 @@ export async function logPoReceivedAction(
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
   const { role, orgId } = session.user
-  if (role !== 'admin' && role !== 'planner' && role !== 'finance_exec') {
+  if (role !== 'admin' && role !== 'finance_exec') {
     return { error: 'Insufficient permissions.' }
   }
 

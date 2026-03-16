@@ -96,7 +96,7 @@ export async function createVersionAction(
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
   const { role, orgId, id: userId } = session.user
-  if (role !== 'admin' && role !== 'finance_exec' && role !== 'planner') {
+  if (role !== 'admin' && role !== 'finance_exec') {
     return { error: 'Insufficient permissions.' }
   }
 
@@ -181,7 +181,7 @@ export async function cloneDocumentAction(
   if (!session?.user?.id) return { error: 'Not authenticated.' }
 
   const { role, orgId, id: userId } = session.user
-  if (role !== 'admin' && role !== 'finance_exec' && role !== 'planner') {
+  if (role !== 'admin' && role !== 'finance_exec') {
     return { error: 'Insufficient permissions.' }
   }
 

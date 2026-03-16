@@ -148,6 +148,9 @@ export default async function CampaignDetailPage({
 
   const totalInvoiced = invoiceDocs.reduce((sum, d) => sum + (d.total_amount ?? 0), 0)
 
+  // Finance visibility: Planner and Compliance cannot see financial figures
+  const canViewFinancials = userRole === 'admin' || userRole === 'finance_exec'
+
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6 overflow-x-hidden">
       {/* Back nav */}
@@ -207,8 +210,8 @@ export default async function CampaignDetailPage({
               )}
             </div>
 
-            {/* PO value mismatch warning */}
-            {campaign.po_amount != null &&
+            {/* PO value mismatch warning — financial roles only */}
+            {canViewFinancials && campaign.po_amount != null &&
               campaign.planned_contract_value != null &&
               campaign.planned_contract_value > 0 &&
               Math.abs(campaign.po_amount - campaign.planned_contract_value) /
@@ -254,10 +257,12 @@ export default async function CampaignDetailPage({
                   <dt className="text-xs text-gray-400">Date</dt>
                   <dd className="text-gray-900">{formatDate(campaign.po_received_date)}</dd>
                 </div>
-                <div>
-                  <dt className="text-xs text-gray-400">Amount</dt>
-                  <dd className="text-gray-900">{formatCurrency(campaign.po_amount, campaign.currency)}</dd>
-                </div>
+                {canViewFinancials && (
+                  <div>
+                    <dt className="text-xs text-gray-400">Amount</dt>
+                    <dd className="text-gray-900">{formatCurrency(campaign.po_amount, campaign.currency)}</dd>
+                  </div>
+                )}
               </dl>
             </div>
             {poDoc?.file_path && (
@@ -276,44 +281,46 @@ export default async function CampaignDetailPage({
         </div>
       )}
 
-      {/* KPI bar — 7 cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-        <KpiCard
-          label="Planned Value"
-          value={formatCurrency(plannedValue, campaign.currency)}
-        />
-        <KpiCard
-          label="Final Billable"
-          value={formatCurrency(finalBillable, campaign.currency)}
-          sub={complianceUploaded ? `${compliancePct != null ? (compliancePct * 100).toFixed(1) + '% compliance' : 'After compliance'}` : 'After compliance'}
-          highlight={complianceUploaded && compliancePct != null ? (compliancePct >= 0.9 ? 'green' : compliancePct >= 0.7 ? 'amber' : 'red') : undefined}
-        />
-        <KpiCard
-          label="Total Invoiced"
-          value={formatCurrency(totalInvoiced || null, campaign.currency)}
-        />
-        <KpiCard
-          label="Cash Received"
-          value={formatCurrency(totalCash || null, campaign.currency)}
-          highlight={totalCash > 0 ? 'green' : undefined}
-        />
-        <KpiCard
-          label="WHT Credits"
-          value={formatCurrency(totalWht || null, campaign.currency)}
-          highlight={totalWht > 0 ? 'amber' : undefined}
-        />
-        <KpiCard
-          label="Total Settled"
-          value={formatCurrency(totalSettled || null, campaign.currency)}
-          highlight={totalSettled > 0 ? 'green' : undefined}
-        />
-        <KpiCard
-          label="Balance"
-          value={formatCurrency(balance, campaign.currency)}
-          sub="Outstanding"
-          highlight={balance != null ? (balance <= 0 ? 'green' : 'red') : undefined}
-        />
-      </div>
+      {/* KPI bar — financial roles only */}
+      {canViewFinancials && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          <KpiCard
+            label="Planned Value"
+            value={formatCurrency(plannedValue, campaign.currency)}
+          />
+          <KpiCard
+            label="Final Billable"
+            value={formatCurrency(finalBillable, campaign.currency)}
+            sub={complianceUploaded ? `${compliancePct != null ? (compliancePct * 100).toFixed(1) + '% compliance' : 'After compliance'}` : 'After compliance'}
+            highlight={complianceUploaded && compliancePct != null ? (compliancePct >= 0.9 ? 'green' : compliancePct >= 0.7 ? 'amber' : 'red') : undefined}
+          />
+          <KpiCard
+            label="Total Invoiced"
+            value={formatCurrency(totalInvoiced || null, campaign.currency)}
+          />
+          <KpiCard
+            label="Cash Received"
+            value={formatCurrency(totalCash || null, campaign.currency)}
+            highlight={totalCash > 0 ? 'green' : undefined}
+          />
+          <KpiCard
+            label="WHT Credits"
+            value={formatCurrency(totalWht || null, campaign.currency)}
+            highlight={totalWht > 0 ? 'amber' : undefined}
+          />
+          <KpiCard
+            label="Total Settled"
+            value={formatCurrency(totalSettled || null, campaign.currency)}
+            highlight={totalSettled > 0 ? 'green' : undefined}
+          />
+          <KpiCard
+            label="Balance"
+            value={formatCurrency(balance, campaign.currency)}
+            sub="Outstanding"
+            highlight={balance != null ? (balance <= 0 ? 'green' : 'red') : undefined}
+          />
+        </div>
+      )}
 
       {/* Compliance details card */}
       {complianceUploaded && campaign.compliance_amount_before_vat != null && (
@@ -394,8 +401,8 @@ export default async function CampaignDetailPage({
         </div>
       )}
 
-      {/* Payment history */}
-      {payments.length > 0 && (
+      {/* Payment history — financial roles only */}
+      {canViewFinancials && payments.length > 0 && (
         <PaymentHistory
           payments={payments}
           finalBillable={finalBillable}

@@ -14,7 +14,7 @@ function primaryActionLink(
   role: UserRole,
   campaignId: string,
 ): { label: string; href: string } | null {
-  if (role === 'admin' || role === 'planner') {
+  if (role === 'admin' || role === 'finance_exec') {
     if (status === 'plan_submitted')
       return { label: 'Create Proforma', href: `/campaigns/${campaignId}/proforma/new` }
   }
@@ -48,7 +48,7 @@ function showDirectInvoiceButton(status: CampaignStatus, role: UserRole): boolea
 function showPoButton(status: CampaignStatus, role: UserRole): boolean {
   return (
     status === 'proforma_sent' &&
-    (role === 'admin' || role === 'planner' || role === 'finance_exec')
+    (role === 'admin' || role === 'finance_exec')
   )
 }
 

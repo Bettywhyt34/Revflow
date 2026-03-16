@@ -64,8 +64,8 @@ export default async function ViewProformaPage({
   const isDraft = doc.status === 'draft'
   const isSuperseded = doc.status === 'superseded'
   const isVoid = doc.status === 'void'
-  const canSend = role === 'admin' || role === 'planner'
-  const canEdit = ['admin', 'finance_exec', 'planner'].includes(role)
+  const canSend = role === 'admin' || role === 'finance_exec'
+  const canEdit = ['admin', 'finance_exec'].includes(role)
 
   const [bankAccounts, orgSettings, clientRow, versionHistory] = await Promise.all([
     getOrgBankAccounts(orgId),
