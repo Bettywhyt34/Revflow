@@ -16,6 +16,9 @@ export interface ClientInput {
   defaultCurrency?: string
   notes?: string
   preferredBankAccountId?: string | null
+  whtApplicable?: boolean
+  whtType?: string
+  whtRate?: number
 }
 
 export async function createClientAction(
@@ -58,6 +61,9 @@ export async function createClientAction(
       default_currency: input.defaultCurrency ?? 'NGN',
       notes: input.notes?.trim() || null,
       preferred_bank_account_id: input.preferredBankAccountId ?? null,
+      wht_applicable: input.whtApplicable ?? true,
+      wht_type: input.whtType ?? 'agency_fee',
+      wht_rate: input.whtRate ?? 0.05,
       created_by: session.user.id,
     })
     .select('id, client_name')
@@ -96,6 +102,9 @@ export async function updateClientAction(
     default_currency: input.defaultCurrency ?? 'NGN',
     notes: input.notes?.trim() || null,
     preferred_bank_account_id: input.preferredBankAccountId ?? null,
+    wht_applicable: input.whtApplicable ?? true,
+    wht_type: input.whtType ?? 'agency_fee',
+    wht_rate: input.whtRate ?? 0.05,
   }
   if (input.customerId !== undefined) {
     updateData.customer_id = input.customerId.trim() || null

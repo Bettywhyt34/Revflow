@@ -197,6 +197,7 @@ export async function extractFromPdf(buffer: Buffer): Promise<ExtractionResult> 
 export async function extractWithClaude(
   textContent: string,
   isOcr: boolean,
+  context: 'plan' | 'compliance' = 'plan',
 ): Promise<ExtractionResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
@@ -221,11 +222,17 @@ export async function extractWithClaude(
         {
           role: 'user',
           content:
-            `This is a media campaign plan document. Find the Amount Before VAT ` +
-            `(the pre-tax subtotal — not the grand total). ` +
-            `Return ONLY valid JSON, no extra text: ` +
-            `{ "amount": number_or_null, "confidence": "high"|"medium"|"low", "reasoning": "string" }\n\n` +
-            `Document text:\n${textContent.slice(0, 8000)}`,
+            context === 'compliance'
+              ? `This is a media campaign compliance document showing delivered advertising. ` +
+                `Find the Amount Before VAT (pre-tax subtotal of delivered value). ` +
+                `Return ONLY valid JSON, no extra text: ` +
+                `{ "amount": number_or_null, "confidence": "high"|"medium"|"low", "reasoning": "string" }\n\n` +
+                `Document text:\n${textContent.slice(0, 8000)}`
+              : `This is a media campaign plan document. Find the Amount Before VAT ` +
+                `(the pre-tax subtotal — not the grand total). ` +
+                `Return ONLY valid JSON, no extra text: ` +
+                `{ "amount": number_or_null, "confidence": "high"|"medium"|"low", "reasoning": "string" }\n\n` +
+                `Document text:\n${textContent.slice(0, 8000)}`,
         },
       ],
     })
@@ -264,6 +271,7 @@ export async function extractWithClaude(
 export async function extractAmountFromFile(
   buffer: Buffer,
   fileName: string,
+  context: 'plan' | 'compliance' = 'plan',
 ): Promise<ExtractionResult> {
   const lower = fileName.toLowerCase()
   const isExcel = lower.endsWith('.xlsx') || lower.endsWith('.xls')
@@ -276,7 +284,7 @@ export async function extractAmountFromFile(
       const textFallback = result.previewRows
         .map((r) => (r as unknown[]).join('\t'))
         .join('\n')
-      const claudeResult = await extractWithClaude(textFallback, false)
+      const claudeResult = await extractWithClaude(textFallback, false, context)
       return {
         ...claudeResult,
         extractionMethod: 'excel_direct',
@@ -291,7 +299,7 @@ export async function extractAmountFromFile(
     if (pdfResult.confidence === 'not_found') {
       // Use full PDF text (or indicate scanned) for Claude
       const textForClaude = pdfResult.pdfTextSnippet ?? '(scanned PDF — no text available)'
-      const claudeResult = await extractWithClaude(textForClaude, pdfResult.extractionMethod === 'pdf_ocr')
+      const claudeResult = await extractWithClaude(textForClaude, pdfResult.extractionMethod === 'pdf_ocr', context)
       return {
         ...claudeResult,
         pdfTextSnippet: pdfResult.pdfTextSnippet,

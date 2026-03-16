@@ -24,7 +24,7 @@ const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard',   icon: LayoutDashboard, active: true,  adminOnly: false },
   { label: 'Campaigns', href: '/campaigns',   icon: Briefcase,       active: true,  adminOnly: false },
   { label: 'Clients',   href: '/clients',     icon: Building2,       active: true,  adminOnly: false },
-  { label: 'Reports',   href: '/reports',     icon: BarChart3,       active: false, adminOnly: false },
+  { label: 'Reports',   href: '/reports',     icon: BarChart3,       active: true,  adminOnly: false },
   { label: 'Users',     href: '/admin/users', icon: Users,           active: true,  adminOnly: true  },
   { label: 'Settings',  href: '/settings',    icon: Settings,        active: true,  adminOnly: false },
 ]
@@ -246,6 +246,10 @@ function TopBar({
       ? 'Clients'
       : pathname.startsWith('/settings')
       ? 'Settings'
+      : pathname.startsWith('/reports/wht-credits')
+      ? 'WHT Credits'
+      : pathname.startsWith('/reports')
+      ? 'Reports'
       : 'Revflow'
 
   async function handleSignOut() {

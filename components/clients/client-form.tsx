@@ -125,6 +125,11 @@ export default function ClientForm({
   const [preferredBankAccountId, setPreferredBankAccountId] = useState(
     client?.preferred_bank_account_id ?? '',
   )
+  const [whtApplicable, setWhtApplicable] = useState(client?.wht_applicable ?? true)
+  const [whtType, setWhtType] = useState(client?.wht_type ?? 'agency_fee')
+  const [whtRateStr, setWhtRateStr] = useState(
+    client?.wht_rate != null ? String(client.wht_rate * 100) : '5',
+  )
 
   function handleSubmit() {
     setError(null)
@@ -142,6 +147,9 @@ export default function ClientForm({
         paymentTerms,
         notes,
         preferredBankAccountId: preferredBankAccountId || null,
+        whtApplicable,
+        whtType,
+        whtRate: parseFloat(whtRateStr) / 100 || 0,
       }
 
       if (isEditing) {
@@ -277,6 +285,73 @@ export default function ClientForm({
                 <option value="NGN">NGN — Nigerian Naira</option>
               </select>
             </div>
+          </div>
+
+          {/* WHT Section */}
+          <div className="border border-gray-100 rounded-xl p-4 space-y-4">
+            <p className="text-sm font-semibold text-gray-700">Withholding Tax (WHT)</p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={whtApplicable}
+                onClick={() => setWhtApplicable((v) => !v)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${whtApplicable ? 'bg-teal-600' : 'bg-gray-200'}`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${whtApplicable ? 'translate-x-5' : 'translate-x-0'}`}
+                />
+              </button>
+              <span className="text-sm text-gray-700">WHT Applicable</span>
+            </div>
+            {whtApplicable && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label>WHT Type</Label>
+                  <select
+                    value={whtType}
+                    onChange={(e) => {
+                      setWhtType(e.target.value)
+                      const rates: Record<string, string> = {
+                        agency_fee: '5',
+                        general_services: '2',
+                        supply_goods: '2',
+                        rent: '10',
+                        dividend: '10',
+                        exempt: '0',
+                        custom: whtRateStr,
+                      }
+                      if (e.target.value !== 'custom') setWhtRateStr(rates[e.target.value] ?? '5')
+                    }}
+                    className={inputCls}
+                    style={{ '--tw-ring-color': '#0D9488' } as React.CSSProperties}
+                  >
+                    <option value="agency_fee">Agency Fee / Consultancy (5%)</option>
+                    <option value="general_services">General Services / Media Buying (2%)</option>
+                    <option value="supply_goods">Supply of Goods (2%)</option>
+                    <option value="rent">Rent (10%)</option>
+                    <option value="dividend">Dividend / Interest / Royalty (10%)</option>
+                    <option value="exempt">Exempt (0%)</option>
+                    <option value="custom">Custom Rate</option>
+                  </select>
+                </div>
+                <div>
+                  <Label>WHT Rate (%)</Label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={whtRateStr}
+                    onChange={(e) => setWhtRateStr(e.target.value)}
+                    disabled={whtType !== 'custom'}
+                    placeholder="e.g. 5"
+                    className={inputCls}
+                    style={{ '--tw-ring-color': '#0D9488' } as React.CSSProperties}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {bankAccounts.length > 0 && (

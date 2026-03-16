@@ -92,6 +92,17 @@ export interface Campaign {
   po_received_date: string | null
   po_amount: number | null
   client_id: string | null
+  // Compliance fields
+  compliance_amount_before_vat: number | null
+  compliance_pct: number | null
+  final_billable: number | null
+  adjustment_write_off: number | null
+  compliance_disputed: boolean
+  compliance_dispute_reason: string | null
+  compliance_confirmed_by: string | null
+  compliance_confirmed_at: string | null
+  over_delivery: boolean
+  over_delivery_pct: number | null
   created_by: string
   created_at: string
   updated_at: string
@@ -111,6 +122,9 @@ export interface Client {
   default_currency: string
   notes: string | null
   preferred_bank_account_id: string | null
+  wht_applicable: boolean
+  wht_type: string
+  wht_rate: number
   created_by: string | null
   created_at: string
   updated_at: string
@@ -126,5 +140,45 @@ export interface CampaignWithRelations extends Campaign {
     cc_emails: string[]
     address: string | null
     payment_terms: string | null
+    wht_applicable: boolean | null
+    wht_type: string | null
+    wht_rate: number | null
   } | null
+}
+
+export interface Payment {
+  id: string
+  campaign_id: string
+  document_id: string | null
+  amount: number
+  currency: string
+  payment_date: string
+  payment_method: 'bank_transfer' | 'cheque' | 'cash' | 'other'
+  reference: string | null
+  notes: string | null
+  wht_applicable: boolean
+  wht_amount: number
+  wht_rate: number | null
+  wht_certificate_number: string | null
+  wht_credit_note_number: string | null
+  actual_cash_received: number | null
+  total_settled: number | null
+  logged_by: string
+  created_at: string
+}
+
+export interface WhtCredit {
+  id: string
+  org_id: string
+  campaign_id: string | null
+  payment_id: string | null
+  client_id: string | null
+  wht_amount: number
+  wht_rate: number | null
+  wht_type: string | null
+  certificate_number: string | null
+  credit_note_number: string | null
+  tax_year: number | null
+  status: 'available' | 'utilised' | 'expired'
+  created_at: string
 }

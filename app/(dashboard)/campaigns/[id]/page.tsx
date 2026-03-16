@@ -3,15 +3,22 @@ import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import {
   getCampaignById,
-  getCampaignPaymentsTotal,
   getCampaignNotifications,
 } from '@/lib/data/campaigns'
 import { getDocumentsByCampaign } from '@/lib/data/documents'
+import {
+  getPaymentsByCampaign,
+  getCampaignCashTotal,
+  getCampaignWhtTotal,
+  getCampaignTotalSettled,
+} from '@/lib/data/payments'
 import StatusBadge from '@/components/campaigns/status-badge'
 import NextActionBadge from '@/components/campaigns/next-action-badge'
-import { ArrowLeft, Calendar, User, FileText, Bell, ClipboardCheck, AlertTriangle, Download } from 'lucide-react'
+import { ArrowLeft, Calendar, User, FileText, Bell, ClipboardCheck, AlertTriangle, Download, TrendingUp, TrendingDown, ShieldCheck, ShieldAlert } from 'lucide-react'
 import type { CampaignStatus, UserRole } from '@/types'
 import CampaignActions from './campaign-actions'
+import PaymentHistory from './payment-history'
+import type { InvoiceOption } from './payment-log-modal'
 
 function formatCurrency(value: number | null, currency = 'NGN'): string {
   if (value == null) return '—'
@@ -38,11 +45,28 @@ function formatDateTime(iso: string): string {
 }
 
 // ── Key figures ───────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function KpiCard({
+  label,
+  value,
+  sub,
+  highlight,
+}: {
+  label: string
+  value: string
+  sub?: string
+  highlight?: 'green' | 'red' | 'amber'
+}) {
+  const colors = {
+    green: 'text-green-600',
+    red: 'text-red-600',
+    amber: 'text-amber-600',
+  }
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 min-w-0">
       <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-      <p className="text-xl font-bold text-gray-900 truncate">{value}</p>
+      <p className={`text-xl font-bold truncate ${highlight ? colors[highlight] : 'text-gray-900'}`}>
+        {value}
+      </p>
       {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
     </div>
   )
@@ -81,24 +105,49 @@ export default async function CampaignDetailPage({
   const orgId = session!.user.orgId
   const userRole = session!.user.role as UserRole
 
-  const [campaign, totalPaid, notifications, documents] = await Promise.all([
-    getCampaignById(id, orgId),
-    getCampaignPaymentsTotal(id),
-    getCampaignNotifications(id),
-    getDocumentsByCampaign(id),
-  ])
+  const [campaign, notifications, documents, payments, totalCash, totalWht, totalSettled] =
+    await Promise.all([
+      getCampaignById(id, orgId),
+      getCampaignNotifications(id),
+      getDocumentsByCampaign(id),
+      getPaymentsByCampaign(id, orgId),
+      getCampaignCashTotal(id),
+      getCampaignWhtTotal(id),
+      getCampaignTotalSettled(id),
+    ])
 
   if (!campaign) notFound()
 
   const status = campaign.status as CampaignStatus
   const plannedValue = campaign.planned_contract_value
   const poDoc = documents.find((d) => d.type === 'purchase_order') ?? null
-  // Final billable = planned until compliance is uploaded
-  const finalBillable = plannedValue
-  const balance = finalBillable != null ? finalBillable - totalPaid : null
+  // Use compliance final_billable if compliance has been uploaded, otherwise planned value
+  const finalBillable = campaign.final_billable ?? plannedValue
+  const balance = finalBillable != null ? finalBillable - totalSettled : null
+  const compliancePct = campaign.compliance_pct
+  const writeOff = campaign.adjustment_write_off ?? 0
+  const complianceUploaded = status === 'compliance_uploaded' || status === 'closed'
+  const complianceReportDoc = documents.find((d) => d.type === 'compliance_report') ?? null
+
+  // Invoices for payment modal
+  const invoiceDocs = documents.filter((d) => d.type === 'invoice' && d.status === 'current')
+  const currentInvoices: InvoiceOption[] = invoiceDocs.map((d) => ({
+    id: d.id,
+    document_number: d.document_number,
+    total_amount: d.total_amount,
+    amount_before_vat: d.amount_before_vat ?? null,
+    outstanding: d.total_amount != null ? Math.max(0, d.total_amount - totalSettled) : null,
+  }))
+
+  // Client WHT profile
+  const clientWhtApplicable = campaign.client?.wht_applicable ?? true
+  const clientWhtType = campaign.client?.wht_type ?? 'agency_fee'
+  const clientWhtRate = campaign.client?.wht_rate ?? 0.05
+
+  const totalInvoiced = invoiceDocs.reduce((sum, d) => sum + (d.total_amount ?? 0), 0)
 
   return (
-    <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6">
+    <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-6xl mx-auto space-y-6 overflow-x-hidden">
       {/* Back nav */}
       <Link
         href="/campaigns"
@@ -179,6 +228,11 @@ export default async function CampaignDetailPage({
             campaignTitle={campaign.title}
             currency={campaign.currency ?? 'NGN'}
             plannedValue={campaign.planned_contract_value}
+            currentInvoices={currentInvoices}
+            balanceOutstanding={balance}
+            clientWhtApplicable={clientWhtApplicable}
+            clientWhtType={clientWhtType}
+            clientWhtRate={clientWhtRate}
           />
         </div>
       </div>
@@ -220,8 +274,8 @@ export default async function CampaignDetailPage({
         </div>
       )}
 
-      {/* KPI bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* KPI bar — 7 cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiCard
           label="Planned Value"
           value={formatCurrency(plannedValue, campaign.currency)}
@@ -229,23 +283,126 @@ export default async function CampaignDetailPage({
         <KpiCard
           label="Final Billable"
           value={formatCurrency(finalBillable, campaign.currency)}
-          sub="After compliance"
+          sub={complianceUploaded ? `${compliancePct != null ? (compliancePct * 100).toFixed(1) + '% compliance' : 'After compliance'}` : 'After compliance'}
+          highlight={complianceUploaded && compliancePct != null ? (compliancePct >= 0.9 ? 'green' : compliancePct >= 0.7 ? 'amber' : 'red') : undefined}
         />
         <KpiCard
-          label="Collected"
-          value={formatCurrency(totalPaid, campaign.currency)}
+          label="Total Invoiced"
+          value={formatCurrency(totalInvoiced || null, campaign.currency)}
+        />
+        <KpiCard
+          label="Cash Received"
+          value={formatCurrency(totalCash || null, campaign.currency)}
+          highlight={totalCash > 0 ? 'green' : undefined}
+        />
+        <KpiCard
+          label="WHT Credits"
+          value={formatCurrency(totalWht || null, campaign.currency)}
+          highlight={totalWht > 0 ? 'amber' : undefined}
+        />
+        <KpiCard
+          label="Total Settled"
+          value={formatCurrency(totalSettled || null, campaign.currency)}
+          highlight={totalSettled > 0 ? 'green' : undefined}
         />
         <KpiCard
           label="Balance"
           value={formatCurrency(balance, campaign.currency)}
           sub="Outstanding"
-        />
-        <KpiCard
-          label="Compliance"
-          value="—"
-          sub="Pending upload"
+          highlight={balance != null ? (balance <= 0 ? 'green' : 'red') : undefined}
         />
       </div>
+
+      {/* Compliance details card */}
+      {complianceUploaded && campaign.compliance_amount_before_vat != null && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-3">
+                {campaign.compliance_disputed ? (
+                  <ShieldAlert className="h-4 w-4 text-amber-500" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4 text-green-500" />
+                )}
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
+                  Compliance Details
+                </p>
+                {campaign.compliance_disputed && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                    Disputed
+                  </span>
+                )}
+              </div>
+              <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-gray-400">Plan Amount</dt>
+                  <dd className="font-semibold text-gray-900">{formatCurrency(plannedValue, campaign.currency)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-400">Compliance Amount</dt>
+                  <dd className="font-semibold text-gray-900">{formatCurrency(campaign.compliance_amount_before_vat, campaign.currency)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-400">Compliance %</dt>
+                  <dd className={`font-bold flex items-center gap-1 ${
+                    compliancePct != null && compliancePct >= 0.9 ? 'text-green-600'
+                    : compliancePct != null && compliancePct >= 0.7 ? 'text-amber-600'
+                    : 'text-red-600'
+                  }`}>
+                    {compliancePct != null ? (
+                      <>
+                        {compliancePct >= 1 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                        {(compliancePct * 100).toFixed(2)}%
+                      </>
+                    ) : '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-400">Write-Off</dt>
+                  <dd className={`font-semibold ${writeOff > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                    {writeOff > 0 ? formatCurrency(writeOff, campaign.currency) : '—'}
+                  </dd>
+                </div>
+              </dl>
+              {campaign.over_delivery && (
+                <div className="mt-3 flex items-center gap-1.5 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 w-fit">
+                  <TrendingUp className="h-3.5 w-3.5 flex-shrink-0" />
+                  Over-delivery: {campaign.over_delivery_pct != null ? `${(campaign.over_delivery_pct * 100).toFixed(2)}%` : ''} above plan. Final Billable capped at Planned Value.
+                </div>
+              )}
+              {campaign.compliance_disputed && campaign.compliance_dispute_reason && (
+                <div className="mt-3 flex items-start gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                  <span><strong>Dispute reason:</strong> {campaign.compliance_dispute_reason}</span>
+                </div>
+              )}
+            </div>
+            {complianceReportDoc?.file_path && (
+              <a
+                href={`/api/documents/${complianceReportDoc.id}/download`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 min-h-[44px] px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition flex-shrink-0"
+              >
+                <Download className="h-4 w-4" />
+                Compliance Report
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Payment history */}
+      {payments.length > 0 && (
+        <PaymentHistory
+          payments={payments}
+          finalBillable={finalBillable}
+          currency={campaign.currency ?? 'NGN'}
+          campaignId={id}
+          userRole={userRole}
+          onRefresh={() => {}}
+        />
+      )}
 
       {/* Lower grid — documents + activity */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

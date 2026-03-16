@@ -24,7 +24,7 @@ export async function getCampaignById(
   const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('campaigns')
-    .select('*, account_manager:account_manager_id(id, full_name), client:client_id(id, client_name, customer_id, email, cc_emails, address, payment_terms)')
+    .select('*, account_manager:account_manager_id(id, full_name), client:client_id(id, client_name, customer_id, email, cc_emails, address, payment_terms, wht_applicable, wht_type, wht_rate)')
     .eq('id', id)
     .eq('org_id', orgId)
     .maybeSingle()
@@ -53,11 +53,11 @@ export async function getCampaignPaymentsTotal(campaignId: string): Promise<numb
   const supabase = createAdminClient()
   const { data } = await supabase
     .from('payments')
-    .select('amount')
+    .select('total_settled, amount')
     .eq('campaign_id', campaignId)
 
   if (!data) return 0
-  return data.reduce((sum, p) => sum + (p.amount ?? 0), 0)
+  return data.reduce((sum, p) => sum + (p.total_settled ?? p.amount ?? 0), 0)
 }
 
 export async function getCampaignNotifications(campaignId: string) {
