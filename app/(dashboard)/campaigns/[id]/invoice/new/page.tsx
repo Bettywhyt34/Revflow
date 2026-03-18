@@ -1,8 +1,9 @@
 import { auth } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
+import Link from 'next/link'
 import { getCampaignById } from '@/lib/data/campaigns'
 import { getOrgSettingsWithDefaults } from '@/lib/data/settings'
-import { getLatestProformaForCampaign } from '@/lib/data/documents'
+import { getLatestProformaForCampaign, getLatestUploadRecord } from '@/lib/data/documents'
 import type { UserRole } from '@/types'
 import InvoiceForm from './invoice-form'
 
@@ -23,10 +24,11 @@ export default async function NewInvoicePage({
 
   if (role !== 'admin' && role !== 'finance_exec') redirect(`/campaigns/${id}`)
 
-  const [campaign, orgSettings, latestProforma] = await Promise.all([
+  const [campaign, orgSettings, latestProforma, uploadRecord] = await Promise.all([
     getCampaignById(id, session!.user.orgId),
     getOrgSettingsWithDefaults(session!.user.orgId),
     getLatestProformaForCampaign(id),
+    getLatestUploadRecord(id),
   ])
   if (!campaign) notFound()
 
@@ -43,6 +45,17 @@ export default async function NewInvoicePage({
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      {!uploadRecord && (
+        <div className="mb-4 flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
+          <span>
+            No plan on file. You can{' '}
+            <Link href={`/campaigns/${id}/upload`} className="font-medium underline hover:text-blue-900">
+              upload a Plan/MPO
+            </Link>
+            {' '}or continue with a direct invoice.
+          </span>
+        </div>
+      )}
       <InvoiceForm
         campaignId={id}
         campaign={{

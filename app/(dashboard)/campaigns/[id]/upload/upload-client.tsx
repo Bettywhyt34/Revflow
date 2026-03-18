@@ -107,6 +107,42 @@ function PdfPreview({ signedUrl, fileName }: { signedUrl: string; fileName: stri
   )
 }
 
+// ── Step progress indicator ───────────────────────────────────────────────────
+function StepProgress({ step }: { step: 'pick' | 'uploading' | 'confirm' | 'saving' }) {
+  const current = step === 'pick' ? 1 : step === 'uploading' ? 2 : 3
+  const labels = ['Select File', 'Extracting', 'Confirm']
+  return (
+    <div className="flex items-center">
+      {labels.map((label, i) => {
+        const num = i + 1
+        const isActive = num === current
+        const isDone = num < current
+        return (
+          <div key={i} className="flex items-center">
+            <div className="flex flex-col items-center gap-1">
+              <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold border-2 transition-colors ${
+                isDone ? 'bg-[#0D9488] border-[#0D9488] text-white'
+                : isActive ? 'border-[#0D9488] text-[#0D9488] bg-white'
+                : 'border-gray-200 text-gray-400 bg-white'
+              }`}>
+                {isDone ? <CheckCircle2 className="h-3.5 w-3.5" /> : num}
+              </div>
+              <span className={`text-[10px] font-medium whitespace-nowrap ${
+                isActive ? 'text-[#0D9488]' : isDone ? 'text-gray-500' : 'text-gray-300'
+              }`}>
+                {label}
+              </span>
+            </div>
+            {i < labels.length - 1 && (
+              <div className={`h-px w-8 sm:w-16 mx-1 mb-4 transition-colors ${num < current ? 'bg-[#0D9488]' : 'bg-gray-200'}`} />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export default function UploadClient({
   campaignId,
@@ -114,12 +150,14 @@ export default function UploadClient({
   campaignTitle,
   advertiser,
   userRole,
+  isUpdate,
 }: {
   campaignId: string
   trackerID: string
   campaignTitle: string
   advertiser: string
   userRole: UserRole
+  isUpdate: boolean
 }) {
   // Step state
   type Step = 'pick' | 'uploading' | 'confirm' | 'saving'
@@ -263,11 +301,22 @@ export default function UploadClient({
           Back to Campaign
         </Link>
 
+        <StepProgress step={step} />
+
         <div>
           <p className="text-xs font-mono font-semibold text-[#0D9488] mb-1">{trackerID}</p>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Upload Plan / MPO</h1>
           <p className="mt-1 text-sm text-gray-500">{advertiser} — {campaignTitle}</p>
         </div>
+
+        {isUpdate && (
+          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3.5 py-3">
+            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-amber-800">
+              Updating an existing plan will flag any current Proforma or Invoice documents as <strong>OUTDATED</strong>. Finance Exec and Admin will be notified.
+            </p>
+          </div>
+        )}
 
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
@@ -349,7 +398,7 @@ export default function UploadClient({
     )
   }
 
-  // ── Step 2: Confirm ──────────────────────────────────────────────────────
+  // ── Step 3: Confirm ──────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <Link
@@ -359,6 +408,8 @@ export default function UploadClient({
         <ArrowLeft className="h-4 w-4" />
         Back to Campaign
       </Link>
+
+      <StepProgress step={step} />
 
       <div>
         <p className="text-xs font-mono font-semibold text-[#0D9488] mb-1">{trackerID}</p>

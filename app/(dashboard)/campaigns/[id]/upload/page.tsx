@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect, notFound } from 'next/navigation'
 import { getCampaignById } from '@/lib/data/campaigns'
+import { getLatestUploadRecord } from '@/lib/data/documents'
 import UploadClient from './upload-client'
 import type { UserRole } from '@/types'
 
@@ -16,10 +17,13 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
 
   if (role !== 'admin' && role !== 'planner' && role !== 'finance_exec') redirect(`/campaigns/${id}`)
 
-  const campaign = await getCampaignById(id, session!.user.orgId)
+  const [campaign, uploadRecord] = await Promise.all([
+    getCampaignById(id, session!.user.orgId),
+    getLatestUploadRecord(id),
+  ])
   if (!campaign) notFound()
 
-  if (campaign.status !== 'plan_submitted') redirect(`/campaigns/${id}`)
+  if (campaign.status === 'closed' || campaign.status === 'cancelled') redirect(`/campaigns/${id}`)
 
   return (
     <div className="px-4 py-6 sm:px-6 lg:px-8 max-w-4xl mx-auto">
@@ -29,6 +33,7 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
         campaignTitle={campaign.title}
         advertiser={campaign.advertiser}
         userRole={role}
+        isUpdate={!!uploadRecord}
       />
     </div>
   )

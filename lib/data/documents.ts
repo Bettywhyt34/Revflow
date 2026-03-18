@@ -151,6 +151,15 @@ export async function getLatestUploadRecord(
   return data as UploadRecordRow | null
 }
 
+export async function getUploadRecordCount(campaignId: string): Promise<number> {
+  const supabase = createAdminClient()
+  const { count } = await supabase
+    .from('upload_records')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', campaignId)
+  return count ?? 0
+}
+
 export async function getDocumentById(
   id: string,
   orgId: string,

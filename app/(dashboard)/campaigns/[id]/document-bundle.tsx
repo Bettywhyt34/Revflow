@@ -65,6 +65,7 @@ interface DocumentBundleProps {
   userRole: UserRole
   currency: string
   writeOff: number
+  uploadRecordVersion: number
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -74,6 +75,7 @@ export default function DocumentBundle({
   campaignId,
   userRole,
   currency,
+  uploadRecordVersion,
 }: DocumentBundleProps) {
   const router = useRouter()
   const [isDownloading, setIsDownloading] = useState(false)
@@ -451,9 +453,15 @@ export default function DocumentBundle({
                     <p className="text-[11px] text-gray-400 truncate">{uploadRecord.file_name}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
                   <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold border uppercase tracking-wide bg-gray-100 text-gray-500 border-gray-200">
                     plan
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold border bg-teal-50 text-teal-700 border-teal-200">
+                    v{uploadRecordVersion}
+                  </span>
+                  <span className="text-xs font-semibold text-gray-700 tabular-nums hidden sm:inline">
+                    {formatCurrency(uploadRecord.confirmed_amount_before_vat, currency)}
                   </span>
                   <span className="text-[11px] text-gray-400 hidden sm:inline">{formatDate(uploadRecord.created_at)}</span>
                   <a
@@ -465,6 +473,14 @@ export default function DocumentBundle({
                     <Download className="h-3 w-3" />
                     Download
                   </a>
+                  {['admin', 'planner', 'finance_exec'].includes(userRole) && (
+                    <Link
+                      href={`/campaigns/${campaignId}/upload`}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-[#0D9488] hover:underline min-h-[28px]"
+                    >
+                      Update Plan
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>

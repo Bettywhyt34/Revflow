@@ -25,7 +25,7 @@ export async function POST(
   }
 
   const { role, orgId } = session.user
-  if (role !== 'admin' && role !== 'planner') {
+  if (role !== 'admin' && role !== 'planner' && role !== 'finance_exec') {
     return NextResponse.json({ error: 'Insufficient permissions.' }, { status: 403 })
   }
 

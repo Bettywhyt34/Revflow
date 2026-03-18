@@ -91,6 +91,7 @@ export interface Campaign {
   po_number: string | null
   po_received_date: string | null
   po_amount: number | null
+  plan_date_received?: string | null
   client_id: string | null
   // Compliance fields
   compliance_amount_before_vat: number | null

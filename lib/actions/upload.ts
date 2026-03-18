@@ -129,6 +129,17 @@ export async function saveUploadRecordAction(data: {
   // (proforma takes priority over plan if both exist)
   await recalculateCampaignMetrics(data.campaignId)
 
+  // Record plan date received
+  await supabase.from('campaigns')
+    .update({ plan_date_received: new Date().toISOString().split('T')[0] })
+    .eq('id', data.campaignId)
+
+  // Advance status draft → plan_submitted (no-op for any other status)
+  await supabase.from('campaigns')
+    .update({ status: 'plan_submitted' })
+    .eq('id', data.campaignId)
+    .eq('status', 'draft')
+
   revalidatePath(`/campaigns/${data.campaignId}`)
   redirect(`/campaigns/${data.campaignId}`)
 }
