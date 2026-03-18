@@ -232,7 +232,7 @@ export async function getDashboardData(
       .in('campaign_id', campaignIds),
     supabase
       .from('documents')
-      .select('id, campaign_id, type, status, document_number, total_amount, currency, due_date, sent_at, created_at, voided_at')
+      .select('id, campaign_id, type, status, document_number, total_amount, amount_before_vat, currency, due_date, sent_at, created_at, voided_at')
       .in('campaign_id', campaignIds)
       .is('voided_at', null),
   ])
@@ -272,8 +272,28 @@ export async function getDashboardData(
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
+  // Build a per-campaign planned value from live document sums so we always
+  // reflect ALL current proformas — not the potentially-stale stored field.
+  const effectivePlannedMap = new Map<string, number>()
   for (const c of campaigns) {
-    const planned = c.planned_contract_value ?? 0
+    const cDocs = documentsByCampaign.get(c.id) ?? []
+    const proformaSum = cDocs
+      .filter((d) => d.type === 'proforma_invoice' && d.status === 'current')
+      .reduce((s, d) => s + ((d as { amount_before_vat?: number | null }).amount_before_vat ?? 0), 0)
+    const invoiceSum = cDocs
+      .filter((d) => d.type === 'invoice' && d.status === 'current')
+      .reduce((s, d) => s + ((d as { amount_before_vat?: number | null }).amount_before_vat ?? 0), 0)
+    // Priority: proformas > invoices > stored planned_contract_value
+    const effective = proformaSum > 0
+      ? proformaSum
+      : invoiceSum > 0
+        ? invoiceSum
+        : (c.planned_contract_value ?? 0)
+    effectivePlannedMap.set(c.id, effective)
+  }
+
+  for (const c of campaigns) {
+    const planned = effectivePlannedMap.get(c.id) ?? 0
     const fb = c.final_billable ?? planned
     const writeOff = c.adjustment_write_off ?? 0
     const cPayments = paymentsByCampaign.get(c.id) ?? []
@@ -307,8 +327,9 @@ export async function getDashboardData(
       })
     }
     const row = monthMap.get(monthKey)!
-    row.planned += c.planned_contract_value ?? 0
-    row.finalBillable += c.final_billable ?? (c.planned_contract_value ?? 0)
+    const ePlanned = effectivePlannedMap.get(c.id) ?? 0
+    row.planned += ePlanned
+    row.finalBillable += c.final_billable ?? ePlanned
     row.writeOff += c.adjustment_write_off ?? 0
   }
 
@@ -346,7 +367,7 @@ export async function getDashboardData(
       (s, p) => s + (p.actual_cash_received ?? p.amount ?? 0) + (p.wht_amount ?? 0),
       0,
     )
-    const fb = c.final_billable ?? (c.planned_contract_value ?? 0)
+    const fb = c.final_billable ?? (effectivePlannedMap.get(c.id) ?? 0)
 
     if (!clientMap.has(clientId)) {
       clientMap.set(clientId, { clientId, clientName, finalBillable: 0, collected: 0, balance: 0, portfolioPct: 0 })
@@ -372,24 +393,24 @@ export async function getDashboardData(
       campaignTitle: c.title,
       clientName: c.client?.client_name ?? 'Unknown',
       financeExec: c.account_manager?.full_name ?? 'Unassigned',
-      planAmount: c.planned_contract_value ?? 0,
+      planAmount: effectivePlannedMap.get(c.id) ?? 0,
       complianceAmount: c.compliance_amount_before_vat ?? 0,
       compliancePct: c.compliance_pct ?? 0,
-      finalBillable: c.final_billable ?? (c.planned_contract_value ?? 0),
+      finalBillable: c.final_billable ?? (effectivePlannedMap.get(c.id) ?? 0),
       writeOff: c.adjustment_write_off ?? 0,
     }))
     .sort((a, b) => b.planAmount - a.planAmount)
 
   // Overall compliance pct (weighted)
-  const totalPlanForCompliance = campaigns.reduce((s, c) => s + (c.planned_contract_value ?? 0), 0)
-  const totalComplianceDelivered = campaigns.reduce((s, c) => s + (c.compliance_amount_before_vat ?? c.planned_contract_value ?? 0), 0)
+  const totalPlanForCompliance = campaigns.reduce((s, c) => s + (effectivePlannedMap.get(c.id) ?? 0), 0)
+  const totalComplianceDelivered = campaigns.reduce((s, c) => s + (c.compliance_amount_before_vat ?? (effectivePlannedMap.get(c.id) ?? 0)), 0)
   const overallCompliancePct = totalPlanForCompliance > 0 ? (totalComplianceDelivered / totalPlanForCompliance) * 100 : 0
 
   // 8. Write-offs
   const writeOffs: WriteOffRow[] = campaigns
     .filter((c) => (c.adjustment_write_off ?? 0) > 0)
     .map((c) => {
-      const planned = c.planned_contract_value ?? 0
+      const planned = effectivePlannedMap.get(c.id) ?? 0
       const writeOff = c.adjustment_write_off ?? 0
       return {
         clientName: c.client?.client_name ?? 'Unknown',
@@ -409,7 +430,7 @@ export async function getDashboardData(
   const agingRows: InvoiceAgingRow[] = []
   for (const c of campaigns) {
     const cDocs = documentsByCampaign.get(c.id) ?? []
-    const invoices = cDocs.filter((d) => d.type === 'tax_invoice' && d.status !== 'void')
+    const invoices = cDocs.filter((d) => d.type === 'invoice' && d.status !== 'void')
     const cPayments = paymentsByCampaign.get(c.id) ?? []
     const totalPaid = cPayments.reduce(
       (s, p) => s + (p.actual_cash_received ?? p.amount ?? 0) + (p.wht_amount ?? 0),
@@ -453,7 +474,7 @@ export async function getDashboardData(
     const cPayments = paymentsByCampaign.get(c.id) ?? []
     if (cPayments.length === 0) continue
     const cDocs = documentsByCampaign.get(c.id) ?? []
-    const invoices = cDocs.filter((d) => d.type === 'tax_invoice' && d.sent_at)
+    const invoices = cDocs.filter((d) => d.type === 'invoice' && d.sent_at)
 
     for (const inv of invoices) {
       if (!inv.sent_at) continue
@@ -644,7 +665,7 @@ export async function getMyQueueData(
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
 
     const invoice = cDocs
-      .filter((d) => d.type === 'tax_invoice' && d.status !== 'void')
+      .filter((d) => d.type === 'invoice' && d.status !== 'void')
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
 
     const hasCompliance = cDocs.some((d) => d.type === 'compliance')
