@@ -4,13 +4,15 @@ import { createAdminClient } from '@/lib/supabase/server'
  * Recalculates planned_contract_value and derived metrics for a campaign.
  *
  * Priority rules:
- *  1. Plan + Proforma         → planned_contract_value = Proforma Amount Before VAT
+ *  1. Plan + Proforma(s)      → planned_contract_value = SUM of all current proforma amounts
  *  2. Plan + Invoice only     → planned_contract_value = Plan confirmed Amount Before VAT
- *  3. Invoice only            → planned_contract_value = Invoice Amount Before VAT
- *  4. Proforma only (no plan) → planned_contract_value = Proforma Amount Before VAT
+ *  3. Invoice only            → planned_contract_value = SUM of all current invoice amounts
+ *  4. Proforma(s) only        → planned_contract_value = SUM of all current proforma amounts
  *  5. Plan only               → planned_contract_value = Plan confirmed Amount Before VAT
  *
- * Proforma/Invoice must be in 'current' or 'outdated' status (i.e. sent, not draft).
+ * Multiple proformas on one campaign (e.g. different billing lines) are summed.
+ * Only 'current' status documents count — 'outdated'/'void'/'superseded' are excluded
+ * to avoid double-counting revised documents.
  *
  * After updating planned_contract_value, if compliance has already been confirmed,
  * the compliance figures (final_billable, compliance_pct, adjustment_write_off,
@@ -31,49 +33,52 @@ export async function recalculateCampaignMetrics(campaignId: string): Promise<vo
       .limit(1)
       .maybeSingle(),
 
-    // Latest sent proforma (current or outdated — not draft/void/superseded)
+    // ALL current proformas — summed to support multiple billing lines per campaign
     supabase
       .from('documents')
       .select('amount_before_vat')
       .eq('campaign_id', campaignId)
       .eq('type', 'proforma_invoice')
-      .in('status', ['current', 'outdated'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .eq('status', 'current'),
 
-    // Latest sent invoice (current or outdated — not draft/void/superseded)
+    // ALL current invoices — summed to support multiple invoices per campaign
     supabase
       .from('documents')
       .select('amount_before_vat')
       .eq('campaign_id', campaignId)
       .eq('type', 'invoice')
-      .in('status', ['current', 'outdated'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .eq('status', 'current'),
   ])
 
+  const proformaTotal = (proformaResult.data ?? []).reduce(
+    (sum, d) => sum + (d.amount_before_vat ?? 0),
+    0,
+  )
+  const invoiceTotal = (invoiceResult.data ?? []).reduce(
+    (sum, d) => sum + (d.amount_before_vat ?? 0),
+    0,
+  )
+
   const hasPlan = (uploadResult.data?.confirmed_amount_before_vat ?? 0) > 0
-  const hasProforma = (proformaResult.data?.amount_before_vat ?? 0) > 0
-  const hasInvoice = (invoiceResult.data?.amount_before_vat ?? 0) > 0
+  const hasProforma = proformaTotal > 0
+  const hasInvoice = invoiceTotal > 0
 
   // ── Apply priority rules ──────────────────────────────────────────────────
 
   let newPlannedValue: number | null = null
 
   if (hasPlan && hasProforma) {
-    // Rule 1: Plan + Proforma → Proforma takes priority (agreed billing amount)
-    newPlannedValue = proformaResult.data!.amount_before_vat
+    // Rule 1: Plan + Proforma(s) → sum of proformas (agreed billing amounts)
+    newPlannedValue = proformaTotal
   } else if (hasPlan && !hasProforma && hasInvoice) {
     // Rule 2: Plan + Invoice (no Proforma) → Plan confirmed amount
     newPlannedValue = uploadResult.data!.confirmed_amount_before_vat
   } else if (!hasPlan && !hasProforma && hasInvoice) {
-    // Rule 3: Invoice only → Invoice amount
-    newPlannedValue = invoiceResult.data!.amount_before_vat
+    // Rule 3: Invoice(s) only → sum of invoices
+    newPlannedValue = invoiceTotal
   } else if (!hasPlan && hasProforma) {
-    // Rule 4: Proforma only (no Plan) → Proforma amount
-    newPlannedValue = proformaResult.data!.amount_before_vat
+    // Rule 4: Proforma(s) only → sum of proformas
+    newPlannedValue = proformaTotal
   } else if (hasPlan) {
     // Rule 5: Plan only (no proforma or invoice yet) → Plan confirmed amount
     newPlannedValue = uploadResult.data!.confirmed_amount_before_vat
