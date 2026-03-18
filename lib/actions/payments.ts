@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
 import { notifyRole } from '@/lib/notify'
+import { recalculateCampaignMetrics } from '@/lib/calculations'
 
 export interface LogPaymentInput {
   campaignId: string
@@ -273,6 +274,9 @@ export async function logPaymentAction(input: LogPaymentInput): Promise<LogPayme
     message: notifMessage,
     actionPath,
   })
+
+  // Recalculate planned_contract_value in case it wasn't set before this payment
+  await recalculateCampaignMetrics(input.campaignId)
 
   revalidatePath(`/campaigns/${input.campaignId}`)
   revalidatePath('/campaigns')

@@ -12,6 +12,7 @@ import {
   getCampaignWhtTotal,
   getCampaignTotalSettled,
 } from '@/lib/data/payments'
+import { recalculateCampaignMetrics } from '@/lib/calculations'
 import StatusBadge from '@/components/campaigns/status-badge'
 import NextActionBadge from '@/components/campaigns/next-action-badge'
 import { ArrowLeft, Calendar, User, FileText, Bell, ClipboardCheck, AlertTriangle, Download, TrendingUp, TrendingDown, ShieldCheck, ShieldAlert } from 'lucide-react'
@@ -106,7 +107,7 @@ export default async function CampaignDetailPage({
   const orgId = session!.user.orgId
   const userRole = session!.user.role as UserRole
 
-  const [campaign, notifications, documents, payments, totalCash, totalWht, totalSettled, uploadRecord] =
+  const [campaignRaw, notifications, documents, payments, totalCash, totalWht, totalSettled, uploadRecord] =
     await Promise.all([
       getCampaignById(id, orgId),
       getCampaignNotifications(id),
@@ -118,7 +119,15 @@ export default async function CampaignDetailPage({
       getLatestUploadRecord(id),
     ])
 
-  if (!campaign) notFound()
+  if (!campaignRaw) notFound()
+
+  // If planned_contract_value is not set, run recalculation and re-read
+  // (recovery for campaigns created before this logic was in place)
+  let campaign = campaignRaw
+  if (!campaignRaw.planned_contract_value) {
+    await recalculateCampaignMetrics(id)
+    campaign = (await getCampaignById(id, orgId)) ?? campaignRaw
+  }
 
   const status = campaign.status as CampaignStatus
   const plannedValue = campaign.planned_contract_value

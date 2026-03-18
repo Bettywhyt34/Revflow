@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase'
 import { notify, notifyRole } from '@/lib/notify'
+import { recalculateCampaignMetrics } from '@/lib/calculations'
 import type { DetectionConfidence, ExtractionMethod } from '@/types'
 
 export async function saveUploadRecordAction(data: {
@@ -124,17 +125,9 @@ export async function saveUploadRecordAction(data: {
     return { error: 'Failed to save upload record.' }
   }
 
-  // Update campaign planned_contract_value
-  const { error: updateErr } = await supabase
-    .from('campaigns')
-    .update({ planned_contract_value: data.confirmedAmountBeforeVat })
-    .eq('id', data.campaignId)
-    .eq('org_id', orgId)
-
-  if (updateErr) {
-    console.error('saveUploadRecord campaign update error:', updateErr)
-    return { error: 'Failed to update campaign value.' }
-  }
+  // Recalculate planned_contract_value using priority rules
+  // (proforma takes priority over plan if both exist)
+  await recalculateCampaignMetrics(data.campaignId)
 
   revalidatePath(`/campaigns/${data.campaignId}`)
   redirect(`/campaigns/${data.campaignId}`)

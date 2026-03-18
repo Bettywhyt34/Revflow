@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase'
 import { getNextDocumentNumber } from '@/lib/data/documents'
 import { buildProformaEmailHtml } from '@/lib/email/proforma-email'
 import { getDefaultBankAccount } from '@/lib/data/settings'
+import { recalculateCampaignMetrics } from '@/lib/calculations'
 import type { SendDocumentParams } from '@/lib/actions/send-document'
 import type { OrgBankAccount } from '@/types'
 import { Resend } from 'resend'
@@ -450,6 +451,9 @@ export async function sendInvoiceAction(
     title: `Invoice ${doc.document_number} sent`,
     message: `Invoice sent to ${params.sentTo}. Awaiting payment.`,
   })
+
+  // Recalculate planned_contract_value based on priority rules
+  await recalculateCampaignMetrics(campaign.id)
 
   revalidatePath(`/campaigns/${campaign.id}`)
   return {}

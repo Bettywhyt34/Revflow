@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase'
 import { getNextDocumentNumber } from '@/lib/data/documents'
 import { buildProformaEmailHtml } from '@/lib/email/proforma-email'
 import { getDefaultBankAccount } from '@/lib/data/settings'
+import { recalculateCampaignMetrics } from '@/lib/calculations'
 import type { SendDocumentParams } from '@/lib/actions/send-document'
 import type { OrgBankAccount } from '@/types'
 import { Resend } from 'resend'
@@ -363,6 +364,9 @@ export async function sendProformaAction(
     message: `Proforma sent to ${params.sentTo}. Awaiting PO from client.`,
   })
 
+  // Recalculate planned_contract_value (proforma amount now takes priority over plan)
+  await recalculateCampaignMetrics(campaign.id)
+
   revalidatePath(`/campaigns/${campaign.id}`)
   redirect(`/campaigns/${campaign.id}`)
 }
@@ -406,6 +410,9 @@ export async function markDocumentAsSentAction(
     .update({ status: newStatus })
     .eq('id', campaignId)
     .eq('org_id', orgId)
+
+  // Recalculate planned_contract_value based on priority rules
+  await recalculateCampaignMetrics(campaignId)
 
   revalidatePath(`/campaigns/${campaignId}`)
   return {}
