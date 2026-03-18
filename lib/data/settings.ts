@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import type { OrgSettings, OrgBankAccount } from '@/types'
 
 const DEFAULTS: Omit<OrgSettings, 'id' | 'org_id' | 'created_at' | 'updated_at'> = {

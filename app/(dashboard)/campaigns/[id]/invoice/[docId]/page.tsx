@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft, CheckCircle, Download, Mail } from 'lucide-react'
 import { getDocumentById, getDocumentVersionHistory } from '@/lib/data/documents'
 import { getOrgBankAccounts, getOrgSettingsWithDefaults } from '@/lib/data/settings'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import type { UserRole, OrgBankAccount } from '@/types'
 import InvoiceDocActions from './doc-actions'
 

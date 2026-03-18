@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import { runChaseEngine } from '@/lib/chase-engine'
 
 export const runtime = 'nodejs'

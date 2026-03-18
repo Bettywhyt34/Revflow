@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import type { OrgBankAccount } from '@/types'
 
 const COLOR_RE = /^#[0-9A-Fa-f]{6}$/

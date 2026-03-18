@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 
 export async function getOrgUsers(orgId: string) {
   const supabase = createAdminClient()

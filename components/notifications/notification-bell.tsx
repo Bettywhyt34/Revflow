@@ -13,7 +13,7 @@ import {
   Zap,
   Clock,
 } from 'lucide-react'
-import type { NotificationRow, NotificationType } from '@/lib/data/notifications'
+import type { NotificationRow, NotificationType } from '@/lib/data/notifications.client'
 
 // ── Type icon map ─────────────────────────────────────────────────────────────
 function TypeIcon({ type, className }: { type: NotificationType; className?: string }) {

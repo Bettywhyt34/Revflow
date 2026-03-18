@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import { notify, notifyRole } from '@/lib/notify'
 import { recalculateCampaignMetrics } from '@/lib/calculations'
 import type { DetectionConfidence, ExtractionMethod } from '@/types'

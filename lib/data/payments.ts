@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import type { Payment, WhtCredit } from '@/types'
 
 export interface PaymentWithRelations extends Payment {

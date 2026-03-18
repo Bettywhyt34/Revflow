@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getOrgSettingsWithDefaults, getOrgBankAccounts } from '@/lib/data/settings'
 import SettingsClient from './settings-client'
 import type { UserRole } from '@/types'

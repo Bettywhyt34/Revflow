@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import type { CampaignWithRelations } from '@/types'
 
 export async function getCampaigns(orgId: string): Promise<CampaignWithRelations[]> {

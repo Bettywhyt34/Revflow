@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getNextDocumentNumber } from '@/lib/data/documents'
 
 const MISMATCH_THRESHOLD_PCT = 5

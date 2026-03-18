@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import { getNextDocumentNumber } from '@/lib/data/documents'
 import { buildProformaEmailHtml } from '@/lib/email/proforma-email'
 import { getDefaultBankAccount } from '@/lib/data/settings'

@@ -3,9 +3,9 @@
 // ── Core notification helper ────────────────────────────────────────────────
 // Inserts in-app notification rows AND sends branded emails to eligible users.
 
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import { buildNotificationEmailHtml } from '@/lib/email/notification-email'
-import type { NotificationType, NotifPrefs } from '@/lib/data/notifications'
+import type { NotificationType, NotifPrefs } from '@/lib/data/notifications.client'
 import { Resend } from 'resend'
 
 export interface NotifyTarget {

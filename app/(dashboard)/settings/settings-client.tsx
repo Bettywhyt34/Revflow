@@ -13,8 +13,8 @@ import {
   type BankAccountInput,
 } from '@/lib/actions/settings'
 import { saveNotificationPrefsAction } from '@/lib/actions/notifications'
-import { DEFAULT_NOTIF_PREFS } from '@/lib/data/notifications'
-import type { NotifPrefs } from '@/lib/data/notifications'
+import { DEFAULT_NOTIF_PREFS } from '@/lib/data/notifications.client'
+import type { NotifPrefs } from '@/lib/data/notifications.client'
 import type { OrgSettings, OrgBankAccount, UserRole } from '@/types'
 import type { TemplateId } from '@/components/documents/template-types'
 import { TEMPLATE_LABELS, TEMPLATE_IDS } from '@/components/documents/template-registry'

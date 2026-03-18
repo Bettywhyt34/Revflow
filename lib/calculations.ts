@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 
 /**
  * Recalculates planned_contract_value and derived metrics for a campaign.

@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import type { Client } from '@/types'
 
 export interface ClientWithStats extends Client {

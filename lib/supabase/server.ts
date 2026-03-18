@@ -1,5 +1,9 @@
+/**
+ * Server-only Supabase clients.
+ * Import this only in Server Components, Route Handlers, and Server Actions.
+ * DO NOT import in Client Components — it uses next/headers (server-only).
+ */
 import { createServerClient as createSSRServerClient } from '@supabase/ssr'
-import { createBrowserClient as createSSRBrowserClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
@@ -29,14 +33,6 @@ export async function createServerClient() {
       },
     },
   })
-}
-
-/**
- * Browser-side Supabase client (anon key, respects RLS).
- * Use in Client Components.
- */
-export function createBrowserClient() {
-  return createSSRBrowserClient(supabaseUrl, supabaseAnonKey)
 }
 
 /**

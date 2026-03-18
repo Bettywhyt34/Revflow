@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 
 export async function POST(req: Request) {
   const session = await auth()

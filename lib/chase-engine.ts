@@ -27,7 +27,7 @@
  * the same tier of notification to the same campaign on the same calendar day.
  */
 
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import { notifyRole } from '@/lib/notify'
 import { fetchHolidays, countWorkingDays, countCalendarDays } from '@/lib/working-days'
 

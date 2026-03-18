@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { getDocumentById } from '@/lib/data/documents'
 import { getOrgSettingsWithDefaults } from '@/lib/data/settings'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 import { renderToBuffer, type DocumentProps } from '@react-pdf/renderer'
 import React from 'react'
 import ProformaInvoicePDF from '@/components/documents/proforma-pdf'

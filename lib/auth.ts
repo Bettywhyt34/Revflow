@@ -3,7 +3,7 @@ import Google from 'next-auth/providers/google'
 import MicrosoftEntraID from 'next-auth/providers/microsoft-entra-id'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
-import { createAdminClient } from '@/lib/supabase'
+import { createAdminClient } from '@/lib/supabase/server'
 
 // ---------------------------------------------------------------------------
 // Zoho OAuth provider (stubbed — wired up in Step 15)
