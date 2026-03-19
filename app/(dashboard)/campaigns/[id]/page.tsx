@@ -122,16 +122,20 @@ export default async function CampaignDetailPage({
 
   if (!campaignRaw) notFound()
 
-  // If planned_contract_value is not set, run recalculation and re-read
-  // (recovery for campaigns created before this logic was in place)
-  let campaign = campaignRaw
-  if (!campaignRaw.planned_contract_value) {
-    await recalculateCampaignMetrics(id)
-    campaign = (await getCampaignById(id, orgId)) ?? campaignRaw
-  }
+  // Always recalculate so multi-proforma campaigns show the correct sum
+  await recalculateCampaignMetrics(id)
+  const campaign = (await getCampaignById(id, orgId)) ?? campaignRaw
 
   const status = campaign.status as CampaignStatus
-  const plannedValue = campaign.planned_contract_value
+
+  // Compute planned value as sum of all active proformas (draft + current)
+  // Draft proformas represent committed planning intent; outdated/superseded/void are excluded
+  // Falls back to stored planned_contract_value if no active proformas exist
+  const activeProformas = documents.filter(
+    (d) => d.type === 'proforma_invoice' && (d.status === 'current' || d.status === 'draft'),
+  )
+  const proformaSum = activeProformas.reduce((s, d) => s + (d.amount_before_vat ?? 0), 0)
+  const plannedValue = proformaSum > 0 ? proformaSum : campaign.planned_contract_value
   const poDoc = documents.find((d) => d.type === 'purchase_order') ?? null
   // Use compliance final_billable if compliance has been uploaded, otherwise planned value
   const finalBillable = campaign.final_billable ?? plannedValue

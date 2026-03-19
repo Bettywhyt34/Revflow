@@ -33,13 +33,14 @@ export async function recalculateCampaignMetrics(campaignId: string): Promise<vo
       .limit(1)
       .maybeSingle(),
 
-    // ALL current proformas — summed to support multiple billing lines per campaign
+    // ALL active proformas (draft + current) — summed to support multiple billing lines per campaign
+    // Draft proformas represent committed planning intent; only outdated/superseded/void are excluded
     supabase
       .from('documents')
       .select('amount_before_vat')
       .eq('campaign_id', campaignId)
       .eq('type', 'proforma_invoice')
-      .eq('status', 'current'),
+      .in('status', ['draft', 'current']),
 
     // ALL current invoices — summed to support multiple invoices per campaign
     supabase

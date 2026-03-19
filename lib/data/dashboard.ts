@@ -278,7 +278,7 @@ export async function getDashboardData(
   for (const c of campaigns) {
     const cDocs = documentsByCampaign.get(c.id) ?? []
     const proformaSum = cDocs
-      .filter((d) => d.type === 'proforma_invoice' && d.status === 'current')
+      .filter((d) => d.type === 'proforma_invoice' && (d.status === 'current' || d.status === 'draft'))
       .reduce((s, d) => s + ((d as { amount_before_vat?: number | null }).amount_before_vat ?? 0), 0)
     const invoiceSum = cDocs
       .filter((d) => d.type === 'invoice' && d.status === 'current')
