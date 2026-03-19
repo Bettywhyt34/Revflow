@@ -49,7 +49,7 @@ export default async function ReportsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
 
-  const userRole = session.user.role as UserRole
+  const userRole = (session.user.role ?? '') as UserRole
   if (userRole !== 'admin' && userRole !== 'finance_exec') {
     redirect('/dashboard')
   }

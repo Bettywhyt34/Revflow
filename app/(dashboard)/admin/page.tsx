@@ -31,7 +31,7 @@ export default async function AdminPage() {
   if (!session?.user?.id) redirect('/login')
   if (session.user.role !== 'admin') redirect('/dashboard')
 
-  const orgId = session.user.orgId
+  const orgId = session.user.orgId ?? ''
   const adminData = await getAdminPanelData(orgId)
 
   const recentUsers = adminData.userActivity.slice(0, 10)

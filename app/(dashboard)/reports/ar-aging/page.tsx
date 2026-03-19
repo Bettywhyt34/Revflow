@@ -1,10 +1,9 @@
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { getDashboardData } from '@/lib/data/dashboard'
-import { getFilterOptions } from '@/lib/data/dashboard'
+import { getDashboardData, getFilterOptions, type InvoiceAgingRow } from '@/lib/data/dashboard'
 import type { UserRole } from '@/types'
-import type { InvoiceAgingRow } from '@/lib/data/dashboard'
+import FilterSelect from '../filter-select'
 
 export const metadata = { title: 'AR Aging — Revflow' }
 
@@ -44,7 +43,7 @@ export default async function ArAgingPage({
   const userRole = session.user.role as UserRole
   if (userRole !== 'admin' && userRole !== 'finance_exec') redirect('/dashboard')
 
-  const orgId = session.user.orgId
+  const orgId = session.user.orgId ?? ''
   const { bucket: bucketParam, exec: execParam } = await searchParams
 
   const [{ agingRows }, filterOptions] = await Promise.all([
@@ -108,43 +107,22 @@ export default async function ArAgingPage({
       </div>
 
       {/* Filters */}
-      <form className="flex flex-wrap gap-3">
-        <select
+      <div className="flex flex-wrap gap-3">
+        <FilterSelect
           name="bucket"
           defaultValue={bucketParam ?? ''}
-          className="min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-          onChange={(e) => {
-            const url = new URL(window.location.href)
-            if (e.target.value) url.searchParams.set('bucket', e.target.value)
-            else url.searchParams.delete('bucket')
-            window.location.href = url.toString()
-          }}
-        >
-          <option value="">All Buckets</option>
-          {BUCKETS.map((b) => (
-            <option key={b} value={b}>{b} days</option>
-          ))}
-        </select>
-
+          placeholder="All Buckets"
+          options={BUCKETS.map((b) => ({ value: b, label: `${b} days` }))}
+        />
         {filterOptions.financeExecs.length > 0 && (
-          <select
+          <FilterSelect
             name="exec"
             defaultValue={execParam ?? ''}
-            className="min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-            onChange={(e) => {
-              const url = new URL(window.location.href)
-              if (e.target.value) url.searchParams.set('exec', e.target.value)
-              else url.searchParams.delete('exec')
-              window.location.href = url.toString()
-            }}
-          >
-            <option value="">All Execs</option>
-            {execNames.map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
+            placeholder="All Execs"
+            options={execNames.map((n) => ({ value: n, label: n }))}
+          />
         )}
-      </form>
+      </div>
 
       {/* Table */}
       {filtered.length === 0 ? (
@@ -182,8 +160,8 @@ export default async function ArAgingPage({
                       </Link>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-gray-500 hidden sm:table-cell">{row.documentNumber}</td>
-                    <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(row.totalAmount, row.currency)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(row.balance, row.currency)}</td>
+                    <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(row.totalAmount, row.currency || 'NGN')}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(row.balance, row.currency || 'NGN')}</td>
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap hidden md:table-cell">{formatDate(row.dueDate)}</td>
                     <td className="px-4 py-3 text-right text-gray-700">{row.daysOverdue}d</td>
                     <td className="px-4 py-3 text-center">

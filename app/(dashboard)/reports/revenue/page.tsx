@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { getDashboardData, resolveDateRange } from '@/lib/data/dashboard'
+import { getDashboardData } from '@/lib/data/dashboard'
 import type { UserRole } from '@/types'
 import RevenueChart from './revenue-chart'
+import FilterSelect from '../filter-select'
 
 export const metadata = { title: 'Revenue Summary — Revflow' }
 
@@ -31,7 +32,7 @@ export default async function RevenuePage({
   const userRole = session.user.role as UserRole
   if (userRole !== 'admin' && userRole !== 'finance_exec') redirect('/dashboard')
 
-  const orgId = session.user.orgId
+  const orgId = session.user.orgId ?? ''
   const { year: yearParam } = await searchParams
 
   const currentYear = new Date().getFullYear()
@@ -78,20 +79,13 @@ export default async function RevenuePage({
       </div>
 
       {/* Year filter */}
-      <form className="flex flex-wrap gap-3">
-        <select
+      <div className="flex flex-wrap gap-3">
+        <FilterSelect
           name="year"
           defaultValue={String(selectedYear)}
-          className="min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-          onChange={(e) => {
-            window.location.href = `/reports/revenue?year=${e.target.value}`
-          }}
-        >
-          {yearOptions.map((y) => (
-            <option key={y} value={String(y)}>{y}</option>
-          ))}
-        </select>
-      </form>
+          options={yearOptions.map((y) => ({ value: String(y), label: String(y) }))}
+        />
+      </div>
 
       {/* KPI Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

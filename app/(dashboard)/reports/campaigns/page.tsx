@@ -2,8 +2,9 @@ import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getCampaigns } from '@/lib/data/campaigns'
-import { getDashboardData, getFilterOptions } from '@/lib/data/dashboard'
+import { getFilterOptions } from '@/lib/data/dashboard'
 import type { UserRole } from '@/types'
+import FilterSelect from '../filter-select'
 
 export const metadata = { title: 'Campaign Report — Revflow' }
 
@@ -51,21 +52,13 @@ export default async function CampaignsReportPage({
   const userRole = session.user.role as UserRole
   if (userRole !== 'admin' && userRole !== 'finance_exec') redirect('/dashboard')
 
-  const orgId = session.user.orgId
+  const orgId = session.user.orgId ?? ''
   const { status: statusParam, client: clientParam, exec: execParam } = await searchParams
 
-  const [campaigns, { kpis, agingRows }, filterOptions] = await Promise.all([
+  const [campaigns, filterOptions] = await Promise.all([
     getCampaigns(orgId),
-    getDashboardData(orgId, { dateRange: 'all_time' }),
     getFilterOptions(orgId),
   ])
-
-  // Build balance map from agingRows
-  const balanceByClient = new Map<string, number>()
-  for (const row of agingRows) {
-    const key = row.clientName
-    balanceByClient.set(key, (balanceByClient.get(key) ?? 0) + row.balance)
-  }
 
   // Apply filters
   const filtered = campaigns.filter((c) => {
@@ -105,62 +98,30 @@ export default async function CampaignsReportPage({
       </div>
 
       {/* Filters */}
-      <form className="flex flex-wrap gap-3">
-        <select
+      <div className="flex flex-wrap gap-3">
+        <FilterSelect
           name="status"
           defaultValue={statusParam ?? ''}
-          className="min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-          onChange={(e) => {
-            const url = new URL(window.location.href)
-            if (e.target.value) url.searchParams.set('status', e.target.value)
-            else url.searchParams.delete('status')
-            window.location.href = url.toString()
-          }}
-        >
-          <option value="">All Statuses</option>
-          {statuses.map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s] ?? s}</option>
-          ))}
-        </select>
-
+          placeholder="All Statuses"
+          options={statuses.map((s) => ({ value: s, label: STATUS_LABELS[s] ?? s }))}
+        />
         {filterOptions.clients.length > 0 && (
-          <select
+          <FilterSelect
             name="client"
             defaultValue={clientParam ?? ''}
-            className="min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-            onChange={(e) => {
-              const url = new URL(window.location.href)
-              if (e.target.value) url.searchParams.set('client', e.target.value)
-              else url.searchParams.delete('client')
-              window.location.href = url.toString()
-            }}
-          >
-            <option value="">All Clients</option>
-            {filterOptions.clients.map((cl) => (
-              <option key={cl.id} value={cl.id}>{cl.client_name}</option>
-            ))}
-          </select>
+            placeholder="All Clients"
+            options={filterOptions.clients.map((cl) => ({ value: cl.id, label: cl.client_name }))}
+          />
         )}
-
         {filterOptions.financeExecs.length > 0 && (
-          <select
+          <FilterSelect
             name="exec"
             defaultValue={execParam ?? ''}
-            className="min-h-[44px] px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-            onChange={(e) => {
-              const url = new URL(window.location.href)
-              if (e.target.value) url.searchParams.set('exec', e.target.value)
-              else url.searchParams.delete('exec')
-              window.location.href = url.toString()
-            }}
-          >
-            <option value="">All Execs</option>
-            {filterOptions.financeExecs.map((ex) => (
-              <option key={ex.id} value={ex.id}>{ex.full_name}</option>
-            ))}
-          </select>
+            placeholder="All Execs"
+            options={filterOptions.financeExecs.map((ex) => ({ value: ex.id, label: ex.full_name }))}
+          />
         )}
-      </form>
+      </div>
 
       {/* Table */}
       {filtered.length === 0 ? (
