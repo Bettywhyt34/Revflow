@@ -26,7 +26,7 @@ export default async function NewProformaPage({
   ])
   if (!campaign) notFound()
 
-  if (campaign.status !== 'plan_submitted') redirect(`/campaigns/${id}`)
+  if (!['plan_submitted', 'proforma_sent'].includes(campaign.status)) redirect(`/campaigns/${id}`)
 
   // Client data for pre-filling BILL TO and CC emails
   const client = campaign.client ?? null

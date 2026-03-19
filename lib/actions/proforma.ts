@@ -114,8 +114,8 @@ export async function createProformaAction(
     .maybeSingle()
 
   if (!campaign) return { error: 'Campaign not found.' }
-  if (campaign.status !== 'plan_submitted') {
-    return { error: 'Campaign is not in plan_submitted status.' }
+  if (!['plan_submitted', 'proforma_sent'].includes(campaign.status)) {
+    return { error: 'Cannot add a proforma at this campaign stage.' }
   }
 
   // Derive totals from line items
